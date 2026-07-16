@@ -1,5 +1,6 @@
 #include <iostream>
 #include <vector>
+#include <windows.h>
 
 #include <winrt/base.h>
 #include <winrt/Windows.Foundation.h>
@@ -9,10 +10,14 @@ using namespace winrt;
 using namespace winrt::Windows::Media::Control;
 
 
+
 int main() {
-    wcout << L"**********************************************" << L"\n";
-    wcout << L"*            AutoLyrics App v1.0             *" << L"\n";
-    wcout << L"**********************************************" << L"\n";
+    SetConsoleOutputCP(CP_UTF8);
+    SetConsoleCP(CP_UTF8);
+
+    cout << "**********************************************" << "\n";
+    cout << "*            AutoLyrics App v1.0             *" << "\n";
+    cout << "**********************************************" << "\n";
 
     winrt::init_apartment();
 
@@ -21,16 +26,17 @@ int main() {
     if (session)
     {
         auto info = session.TryGetMediaPropertiesAsync().get();
-
-        wcout << L"Now Playing: " << info.Title().c_str() << " by " << info.Artist().c_str() << std::endl;
+        string title = winrt::to_string(info.Title());
+        string artist = winrt::to_string(info.Artist());
+        cout << "Now    Playing: " << title << " by " << artist << std::endl;
     }
     else
     {
-        wcout << L"No media session active." << std::endl;
+        cout << "No media session active." << std::endl;
     }
 
-    wcout << L"**********************************************" << L"\n";
-    wcout << L"*                     End                    *" << L"\n";
-    wcout << L"**********************************************" << L"\n";
+    cout << "**********************************************" << "\n";
+    cout << "*                     End                    *" << "\n";
+    cout << "**********************************************" << "\n";
     return 0;
 }
