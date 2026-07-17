@@ -1,4 +1,6 @@
 note.txt
 /.vscode
-version_1.exe
-version_1.obj
+/python_version
+/vcpkg
+*.obj
+*.exe
