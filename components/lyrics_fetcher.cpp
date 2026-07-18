@@ -1,6 +1,5 @@
 #include "lyrics_fetcher.h"
 
-#include <windows.h>
 #include <cstdio>
 
 string get_lyrics(const string& title, const string& artist)

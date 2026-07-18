@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <array>
+#include <windows.h>
 
 using std::string;
 using std::wstring;
