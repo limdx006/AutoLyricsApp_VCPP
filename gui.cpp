@@ -13,22 +13,28 @@
 static HBRUSH g_hbrBackground = nullptr;
 static HBRUSH g_hbrCard        = nullptr;
 static HBRUSH g_hbrEditBg      = nullptr;
+static HBRUSH g_hbrProgressBar = nullptr;
 static HFONT  g_hFontSong      = nullptr;
 static HFONT  g_hFontArtist    = nullptr;
 static HFONT  g_hFontIcon      = nullptr;
 static HFONT  g_hFontIconLarge = nullptr;
 static HFONT  g_hFontLabel     = nullptr;
+static HFONT  g_hFontTime      = nullptr;
+static HFONT  g_hFontStatus    = nullptr;
 
-// Hover state for the three icon labels (PTT, Refresh, Settings).
-// STATIC controls don't report hover on their own, so each one gets
-// subclassed below to watch WM_MOUSEMOVE / WM_MOUSELEAVE directly.
+// Hover state for icon labels.
+// Header section
 static bool g_hoverPTT      = false;
 static bool g_hoverRefresh  = false;
 static bool g_hoverSettings = false;
+// Bottom section (playback controls)
+static bool g_hoverPrev     = false;
+static bool g_hoverPlayPause = false;
+static bool g_hoverNext     = false;
 
-// Shared subclass procedure for all three icon labels. dwRefData carries
+// Shared subclass procedure for icon labels. dwRefData carries
 // the address of that control's own hover flag, so one function can
-// serve all three without needing to branch on control ID.
+// serve all of them without needing to branch on control ID.
 LRESULT CALLBACK IconHoverSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam,
                                         UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
 {
@@ -63,6 +69,7 @@ LRESULT CALLBACK IconHoverSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
 // Forward declarations
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 void CreateHeaderControls(HWND parent, HINSTANCE hInstance);
+void CreateBottomControls(HWND parent, HINSTANCE hInstance);
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 {
@@ -71,6 +78,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
     g_hbrBackground = CreateSolidBrush(APP_COLOR_BACKGROUND);
     g_hbrCard       = CreateSolidBrush(APP_COLOR_CARD);
     g_hbrEditBg     = CreateSolidBrush(APP_COLOR_EDIT_BG);
+    g_hbrProgressBar = CreateSolidBrush(APP_COLOR_PROGRESS_BAR);
 
     WNDCLASSEXW wc = {};
     wc.cbSize        = sizeof(WNDCLASSEXW);
@@ -264,6 +272,87 @@ void CreateHeaderControls(HWND parent, HINSTANCE hInstance)
     SendMessageW(hBtnPlus, WM_SETFONT, (WPARAM)g_hFontLabel, TRUE);
 }
 
+void CreateBottomControls(HWND parent, HINSTANCE hInstance)
+{
+    g_hFontTime = CreateFontW(
+        FONT_SIZE_TIME, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, FONT_FACE_UI);
+
+    g_hFontStatus = CreateFontW(
+        FONT_SIZE_STATUS, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, FONT_FACE_UI);
+
+    // Bottom card: same background as main window (not the header card color)
+    // so it visually blends with the lyrics area above it.
+    int cardBottom = BOTTOM_CARD_TOP + BOTTOM_CARD_HEIGHT;
+
+    // Time row: Current time (left), playback controls (center), End time (right)
+    int timeRowY = BOTTOM_CARD_TOP + PROGRESS_BAR_HEIGHT + TIME_TEXT_MARGIN;
+    int timeRowCenterY = timeRowY + TIME_TEXT_HEIGHT / 2;
+
+    // Current time - left aligned
+    HWND hStaticCurrTime = CreateWindowW(
+        L"STATIC", CURRENT_TIME,
+        WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX,
+        CARD_LEFT + TIME_TEXT_MARGIN, timeRowY, 60, TIME_TEXT_HEIGHT,
+        parent, (HMENU)ID_STATIC_CURR_TIME, hInstance, nullptr);
+    SendMessageW(hStaticCurrTime, WM_SETFONT, (WPARAM)g_hFontTime, TRUE);
+
+    // End time - right aligned
+    HWND hStaticEndTime = CreateWindowW(
+        L"STATIC", END_TIME,
+        WS_CHILD | WS_VISIBLE | SS_RIGHT | SS_NOPREFIX,
+        CARD_LEFT + CARD_WIDTH - 60 - TIME_TEXT_MARGIN, timeRowY, 60, TIME_TEXT_HEIGHT,
+        parent, (HMENU)ID_STATIC_END_TIME, hInstance, nullptr);
+    SendMessageW(hStaticEndTime, WM_SETFONT, (WPARAM)g_hFontTime, TRUE);
+
+    // Playback controls: Previous, Play/Pause, Next - centered
+    // Total width = 3 icons + 2 gaps
+    int controlsTotalWidth = (PLAY_ICON_SIZE * 3) + (PLAY_ICON_GAP * 2);
+    int controlsX = CARD_LEFT + (CARD_WIDTH - controlsTotalWidth) / 2;
+    int controlsY = timeRowCenterY - PLAY_ICON_SIZE / 2;
+
+    // Previous: \u23EE (skip backward / previous track)
+    HWND hBtnPrev = CreateWindowW(
+        L"STATIC", L"\u23EE",
+        WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY | SS_NOPREFIX,
+        controlsX, controlsY, PLAY_ICON_SIZE, PLAY_ICON_SIZE,
+        parent, (HMENU)ID_BTN_PREV, hInstance, nullptr);
+    SendMessageW(hBtnPrev, WM_SETFONT, (WPARAM)g_hFontIcon, TRUE);
+    SetWindowSubclass(hBtnPrev, IconHoverSubclassProc, 4, (DWORD_PTR)&g_hoverPrev);
+    controlsX += PLAY_ICON_SIZE + PLAY_ICON_GAP;
+
+    // Play/Pause: \u23F8 (pause symbol - two vertical bars)
+    HWND hBtnPlayPause = CreateWindowW(
+        L"STATIC", L"\u23F8",
+        WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY | SS_NOPREFIX,
+        controlsX, controlsY, PLAY_ICON_SIZE, PLAY_ICON_SIZE,
+        parent, (HMENU)ID_BTN_PLAY_PAUSE, hInstance, nullptr);
+    SendMessageW(hBtnPlayPause, WM_SETFONT, (WPARAM)g_hFontIcon, TRUE);
+    SetWindowSubclass(hBtnPlayPause, IconHoverSubclassProc, 5, (DWORD_PTR)&g_hoverPlayPause);
+    controlsX += PLAY_ICON_SIZE + PLAY_ICON_GAP;
+
+    // Next: \u23ED (skip forward / next track)
+    HWND hBtnNext = CreateWindowW(
+        L"STATIC", L"\u23ED",
+        WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY | SS_NOPREFIX,
+        controlsX, controlsY, PLAY_ICON_SIZE, PLAY_ICON_SIZE,
+        parent, (HMENU)ID_BTN_NEXT, hInstance, nullptr);
+    SendMessageW(hBtnNext, WM_SETFONT, (WPARAM)g_hFontIcon, TRUE);
+    SetWindowSubclass(hBtnNext, IconHoverSubclassProc, 6, (DWORD_PTR)&g_hoverNext);
+
+    // Status text: "Playing" - centered at bottom of card
+    int statusY = cardBottom - STATUS_TEXT_HEIGHT - STATUS_MARGIN_BOTTOM;
+    HWND hStaticStatus = CreateWindowW(
+        L"STATIC", STATUS_TEXT,
+        WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOPREFIX,
+        CARD_LEFT, statusY, CARD_WIDTH, STATUS_TEXT_HEIGHT,
+        parent, (HMENU)ID_STATIC_STATUS, hInstance, nullptr);
+    SendMessageW(hStaticStatus, WM_SETFONT, (WPARAM)g_hFontStatus, TRUE);
+}
+
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
     switch (msg)
@@ -272,6 +361,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         {
             HINSTANCE hInstance = ((LPCREATESTRUCTW)lParam)->hInstance;
             CreateHeaderControls(hwnd, hInstance);
+            CreateBottomControls(hwnd, hInstance);
             return 0;
         }
 
@@ -281,6 +371,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             PAINTSTRUCT ps;
             HDC hdc = BeginPaint(hwnd, &ps);
 
+            // --- Header card ---
             HBRUSH oldBrush = (HBRUSH)SelectObject(hdc, g_hbrCard);
             HPEN   nullPen  = (HPEN)GetStockObject(NULL_PEN);
             HPEN   oldPen   = (HPEN)SelectObject(hdc, nullPen);
@@ -292,6 +383,44 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
             SelectObject(hdc, oldBrush);
             SelectObject(hdc, oldPen);
+
+            // --- Bottom card ---
+            // Use the background brush so it blends with the main window
+            oldBrush = (HBRUSH)SelectObject(hdc, g_hbrBackground);
+            oldPen   = (HPEN)SelectObject(hdc, nullPen);
+
+            RoundRect(hdc,
+                CARD_LEFT, BOTTOM_CARD_TOP,
+                CARD_LEFT + CARD_WIDTH, BOTTOM_CARD_TOP + BOTTOM_CARD_HEIGHT,
+                CARD_RADIUS, CARD_RADIUS);
+
+            SelectObject(hdc, oldBrush);
+            SelectObject(hdc, oldPen);
+
+            // --- Progress bar (red, 75% filled) ---
+            // Uses PROGRESS_BAR_H_MARGIN for left/right inset so you can
+            // easily tweak the bar width in config.cpp.
+            int barLeft   = CARD_LEFT + PROGRESS_BAR_H_MARGIN;
+            int barTop    = BOTTOM_CARD_TOP + PROGRESS_BAR_MARGIN;
+            int barRight  = CARD_LEFT + CARD_WIDTH - PROGRESS_BAR_H_MARGIN;
+            int barBottom = barTop + PROGRESS_BAR_HEIGHT;
+            int barWidth  = barRight - barLeft;
+            int fillWidth = (barWidth * PROGRESS_BAR_FILL_PERCENT) / 100;
+
+            // Background track (slightly lighter than card bg)
+            HBRUSH hbrTrack = CreateSolidBrush(RGB(0x30, 0x30, 0x45));
+            oldBrush = (HBRUSH)SelectObject(hdc, hbrTrack);
+            RoundRect(hdc, barLeft, barTop, barRight, barBottom, 3, 3);
+            SelectObject(hdc, oldBrush);
+            DeleteObject(hbrTrack);
+
+            // Filled portion (red)
+            oldBrush = (HBRUSH)SelectObject(hdc, g_hbrProgressBar);
+            if (fillWidth > 0)
+            {
+                RoundRect(hdc, barLeft, barTop, barLeft + fillWidth, barBottom, 3, 3);
+            }
+            SelectObject(hdc, oldBrush);
 
             EndPaint(hwnd, &ps);
             return 0;
@@ -317,8 +446,28 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 SetTextColor(hdcStatic, APP_COLOR_ICON_HOVER);
             else if (ctrlId == ID_BTN_SETTINGS && g_hoverSettings)
                 SetTextColor(hdcStatic, APP_COLOR_ICON_HOVER);
+            else if (ctrlId == ID_BTN_PREV && g_hoverPrev)
+                SetTextColor(hdcStatic, APP_COLOR_ICON_HOVER);
+            else if (ctrlId == ID_BTN_PLAY_PAUSE && g_hoverPlayPause)
+                SetTextColor(hdcStatic, APP_COLOR_ICON_HOVER);
+            else if (ctrlId == ID_BTN_NEXT && g_hoverNext)
+                SetTextColor(hdcStatic, APP_COLOR_ICON_HOVER);
+            else if (ctrlId == ID_STATIC_CURR_TIME || ctrlId == ID_STATIC_END_TIME)
+                SetTextColor(hdcStatic, APP_COLOR_LIGHT_TEXT);
+            else if (ctrlId == ID_STATIC_STATUS)
+                SetTextColor(hdcStatic, APP_COLOR_ARTIST_TEXT);
+            else if (ctrlId == ID_BTN_PREV || ctrlId == ID_BTN_PLAY_PAUSE || ctrlId == ID_BTN_NEXT)
+                SetTextColor(hdcStatic, APP_COLOR_LIGHT_TEXT);
             else
                 SetTextColor(hdcStatic, APP_COLOR_LIGHT_TEXT);
+
+            // Bottom card controls use background brush; header card controls use card brush
+            if (ctrlId == ID_STATIC_CURR_TIME || ctrlId == ID_STATIC_END_TIME ||
+                ctrlId == ID_STATIC_STATUS || ctrlId == ID_BTN_PREV ||
+                ctrlId == ID_BTN_PLAY_PAUSE || ctrlId == ID_BTN_NEXT)
+            {
+                return (LRESULT)g_hbrBackground;
+            }
 
             return (LRESULT)g_hbrCard;
         }
@@ -345,6 +494,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 case ID_BTN_SETTINGS:
                 case ID_BTN_OFFSET_MINUS:
                 case ID_BTN_OFFSET_PLUS:
+                case ID_BTN_PREV:
+                case ID_BTN_PLAY_PAUSE:
+                case ID_BTN_NEXT:
                     // TODO: hook up functionality later
                     break;
             }
@@ -355,11 +507,14 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             if (g_hbrBackground)  { DeleteObject(g_hbrBackground);  g_hbrBackground = nullptr; }
             if (g_hbrCard)        { DeleteObject(g_hbrCard);        g_hbrCard = nullptr; }
             if (g_hbrEditBg)      { DeleteObject(g_hbrEditBg);      g_hbrEditBg = nullptr; }
+            if (g_hbrProgressBar) { DeleteObject(g_hbrProgressBar); g_hbrProgressBar = nullptr; }
             if (g_hFontSong)      { DeleteObject(g_hFontSong);      g_hFontSong = nullptr; }
             if (g_hFontArtist)    { DeleteObject(g_hFontArtist);    g_hFontArtist = nullptr; }
             if (g_hFontIcon)      { DeleteObject(g_hFontIcon);      g_hFontIcon = nullptr; }
             if (g_hFontIconLarge) { DeleteObject(g_hFontIconLarge); g_hFontIconLarge = nullptr; }
             if (g_hFontLabel)     { DeleteObject(g_hFontLabel);     g_hFontLabel = nullptr; }
+            if (g_hFontTime)      { DeleteObject(g_hFontTime);      g_hFontTime = nullptr; }
+            if (g_hFontStatus)    { DeleteObject(g_hFontStatus);    g_hFontStatus = nullptr; }
             PostQuitMessage(0);
             return 0;
     }

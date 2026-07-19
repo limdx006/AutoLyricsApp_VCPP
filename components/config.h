@@ -14,6 +14,14 @@
 #define ID_EDIT_OFFSET       108
 #define ID_BTN_OFFSET_PLUS   109
 
+// Bottom card controls
+#define ID_STATIC_CURR_TIME  110
+#define ID_STATIC_END_TIME   111
+#define ID_STATIC_STATUS     112
+#define ID_BTN_PREV          113
+#define ID_BTN_PLAY_PAUSE    114
+#define ID_BTN_NEXT          115
+
 // Window size
 extern const int WINDOW_WIDTH;
 extern const int WINDOW_HEIGHT;
@@ -49,12 +57,28 @@ extern const int OFFSET_GAP_LABEL_TO_MINUS;
 extern const int OFFSET_GAP_MINUS_TO_EDIT;
 extern const int OFFSET_GAP_EDIT_TO_PLUS;
 
+// Bottom card layout
+extern const int BOTTOM_CARD_HEIGHT;
+extern const int BOTTOM_CARD_TOP;
+extern const int PROGRESS_BAR_HEIGHT;
+extern const int PROGRESS_BAR_MARGIN;      // vertical margin (top)
+extern const int PROGRESS_BAR_H_MARGIN;    // horizontal margin (left/right) - adjust this to make bar narrower/wider
+extern const int PROGRESS_BAR_FILL_PERCENT;
+extern const int TIME_TEXT_HEIGHT;
+extern const int TIME_TEXT_MARGIN;
+extern const int PLAY_ICON_SIZE;
+extern const int PLAY_ICON_GAP;
+extern const int STATUS_TEXT_HEIGHT;
+extern const int STATUS_MARGIN_BOTTOM;
+
 // Fonts
 extern const int FONT_SIZE_SONG;
 extern const int FONT_SIZE_ARTIST;
 extern const int FONT_SIZE_ICON;
 extern const int FONT_SIZE_ICON_LARGE;
 extern const int FONT_SIZE_LABEL;
+extern const int FONT_SIZE_TIME;
+extern const int FONT_SIZE_STATUS;
 extern const wchar_t* const FONT_FACE_UI;
 extern const wchar_t* const FONT_FACE_SYMBOL;
 
@@ -67,8 +91,12 @@ extern const COLORREF APP_COLOR_ARTIST_TEXT;  // artist name color
 extern const COLORREF APP_COLOR_LIGHT_TEXT;   // icon labels / offset label color
 extern const COLORREF APP_COLOR_EDIT_TEXT;    // offset value text color
 extern const COLORREF APP_COLOR_ICON_HOVER;   // PTT/Refresh/Settings hover color
+extern const COLORREF APP_COLOR_PROGRESS_BAR; // progress bar fill color
 
 // Hardcoded display text (temporary, until real song data is wired up)
 extern const wchar_t* const SONG_NAME;
 extern const wchar_t* const ARTIST_NAME;
 extern const wchar_t* const OFFSET_VALUE;
+extern const wchar_t* const CURRENT_TIME;
+extern const wchar_t* const END_TIME;
+extern const wchar_t* const STATUS_TEXT;
