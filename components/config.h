@@ -1,0 +1,73 @@
+#pragma once
+#include <windows.h>
+
+// Control IDs. These are used in switch/case and as HMENU literals, both
+// of which require compile-time constants, so they stay as #define rather
+// than becoming config.cpp variables like everything else here.
+#define ID_BTN_PTT          101   // Pin-To-Top
+#define ID_BTN_REFRESH       102
+#define ID_BTN_SETTINGS      103
+#define ID_STATIC_SONG       104
+#define ID_STATIC_ARTIST     105
+#define ID_STATIC_OFFSET_LBL 106
+#define ID_BTN_OFFSET_MINUS  107
+#define ID_EDIT_OFFSET       108
+#define ID_BTN_OFFSET_PLUS   109
+
+// Window size
+extern const int WINDOW_WIDTH;
+extern const int WINDOW_HEIGHT;
+
+// Header card layout
+extern const int CARD_MARGIN;   // gap between window edge and card
+extern const int CARD_LEFT;
+extern const int CARD_TOP;
+extern const int CARD_WIDTH;
+extern const int CARD_HEIGHT;
+extern const int CARD_RADIUS;   // corner rounding
+
+// Pin-To-Top sizing. PTT sits at the top-right of the card; SIDE_RESERVED
+// is kept clear on the left too so the song text block stays centered.
+extern const int PTT_SIZE;
+extern const int PTT_MARGIN;      // gap from card edge to PTT box
+extern const int SIDE_RESERVED;   // PTT_SIZE + PTT_MARGIN
+extern const int SONG_TOP_OFFSET; // gap from card top to the song/PTT row
+extern const int ARTIST_GAP;      // gap between song text block and artist line
+
+// Footer row: REF | Offset: - value + | ST
+extern const int FOOTER_ROW_OFFSET_FROM_BOTTOM; // how far above the card bottom the row sits
+extern const int FOOTER_ICON_SIZE;               // REF / ST box size
+extern const int FOOTER_ICON_MARGIN;             // gap from card edge to REF / ST
+
+// Offset cluster (the "Offset: - 0.3 +" group)
+extern const int OFFSET_LABEL_WIDTH;
+extern const int OFFSET_LABEL_HEIGHT;
+extern const int OFFSET_BTN_SIZE;
+extern const int OFFSET_EDIT_WIDTH;
+extern const int OFFSET_EDIT_HEIGHT;
+extern const int OFFSET_GAP_LABEL_TO_MINUS;
+extern const int OFFSET_GAP_MINUS_TO_EDIT;
+extern const int OFFSET_GAP_EDIT_TO_PLUS;
+
+// Fonts
+extern const int FONT_SIZE_SONG;
+extern const int FONT_SIZE_ARTIST;
+extern const int FONT_SIZE_ICON;
+extern const int FONT_SIZE_ICON_LARGE;
+extern const int FONT_SIZE_LABEL;
+extern const wchar_t* const FONT_FACE_UI;
+extern const wchar_t* const FONT_FACE_SYMBOL;
+
+// Colors
+extern const COLORREF APP_COLOR_BACKGROUND;   // main window bg
+extern const COLORREF APP_COLOR_CARD;         // header card bg
+extern const COLORREF APP_COLOR_EDIT_BG;      // offset value box bg
+extern const COLORREF APP_COLOR_SONG_TEXT;    // song name accent color
+extern const COLORREF APP_COLOR_ARTIST_TEXT;  // artist name color
+extern const COLORREF APP_COLOR_LIGHT_TEXT;   // icon labels / offset label color
+extern const COLORREF APP_COLOR_EDIT_TEXT;    // offset value text color
+
+// Hardcoded display text (temporary, until real song data is wired up)
+extern const wchar_t* const SONG_NAME;
+extern const wchar_t* const ARTIST_NAME;
+extern const wchar_t* const OFFSET_VALUE;

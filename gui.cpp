@@ -6,45 +6,12 @@
 #endif
 
 #include <windows.h>
-
-// Window dimensions
-constexpr int WINDOW_WIDTH  = 400;
-constexpr int WINDOW_HEIGHT = 800;
-
-// Header card layout
-constexpr int CARD_MARGIN   = 15;   // gap between window edge and card
-constexpr int CARD_LEFT     = CARD_MARGIN;
-constexpr int CARD_TOP      = CARD_MARGIN;
-constexpr int CARD_WIDTH    = WINDOW_WIDTH - (CARD_MARGIN * 2);
-constexpr int CARD_HEIGHT   = 180;
-constexpr int CARD_RADIUS   = 24;   // corner rounding
-
-// PTT sits at the top-right of the card, reserving equal blank space at
-// the top-left so the song name text stays centered between the two.
-constexpr int PTT_SIZE   = 40;
-constexpr int PTT_MARGIN = 10;                     // gap from card edge to PTT box
-constexpr int SIDE_RESERVED = PTT_SIZE + PTT_MARGIN; // total space kept clear on each side
-
-// Control IDs
-#define ID_BTN_PTT          101   // Pin-To-Top
-#define ID_BTN_REFRESH       102
-#define ID_BTN_SETTINGS      103
-#define ID_STATIC_SONG       104
-#define ID_STATIC_ARTIST     105
-#define ID_STATIC_OFFSET_LBL 106
-#define ID_BTN_OFFSET_MINUS  107
-#define ID_EDIT_OFFSET       108
-#define ID_BTN_OFFSET_PLUS   109
-
-// Hardcoded display text (temporary)
-static const wchar_t* SONG_NAME    = L"Song Name Goes Here";
-static const wchar_t* ARTIST_NAME  = L"Unknown Artist";
-static const wchar_t* OFFSET_VALUE = L"0.3";
+#include "components/config.h"
 
 // Globals
-static HBRUSH g_hbrBackground  = nullptr;   // main window bg: #1a1a2e
-static HBRUSH g_hbrCard        = nullptr;   // card bg:        #16213e
-static HBRUSH g_hbrEditBg      = nullptr;   // offset value box: white
+static HBRUSH g_hbrBackground = nullptr;
+static HBRUSH g_hbrCard        = nullptr;
+static HBRUSH g_hbrEditBg      = nullptr;
 static HFONT  g_hFontSong      = nullptr;
 static HFONT  g_hFontArtist    = nullptr;
 static HFONT  g_hFontIcon      = nullptr;
@@ -59,9 +26,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 {
     const wchar_t CLASS_NAME[] = L"AutoLyricsWindowClass";
 
-    g_hbrBackground = CreateSolidBrush(RGB(0x1a, 0x1a, 0x2e));
-    g_hbrCard       = CreateSolidBrush(RGB(0x16, 0x21, 0x3e));
-    g_hbrEditBg     = CreateSolidBrush(RGB(0xff, 0xff, 0xff));
+    g_hbrBackground = CreateSolidBrush(APP_COLOR_BACKGROUND);
+    g_hbrCard       = CreateSolidBrush(APP_COLOR_CARD);
+    g_hbrEditBg     = CreateSolidBrush(APP_COLOR_EDIT_BG);
 
     WNDCLASSEXW wc = {};
     wc.cbSize        = sizeof(WNDCLASSEXW);
@@ -121,45 +88,41 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
 void CreateHeaderControls(HWND parent, HINSTANCE hInstance)
 {
-    // Fonts
     g_hFontSong = CreateFontW(
-        30, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+        FONT_SIZE_SONG, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, FONT_FACE_UI);
 
     g_hFontArtist = CreateFontW(
-        15, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        FONT_SIZE_ARTIST, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, FONT_FACE_UI);
 
-    // Icon glyph for the pin label
     g_hFontIcon = CreateFontW(
-        40, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        FONT_SIZE_ICON, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI Symbol");
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, FONT_FACE_SYMBOL);
 
-    // Larger icon glyphs for REF / ST in the footer row
     g_hFontIconLarge = CreateFontW(
-        40, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        FONT_SIZE_ICON_LARGE, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI Symbol");
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, FONT_FACE_SYMBOL);
 
-    // Offset label, +/- buttons, and the value text all share this font
     g_hFontLabel = CreateFontW(
-        25, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+        FONT_SIZE_LABEL, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, FONT_FACE_UI);
 
     // Song name area is inset by SIDE_RESERVED on both sides: the right
     // inset leaves room for the PTT icon, the left inset is left blank
     // to match, so the text block stays visually centered on the card.
     int songX = CARD_LEFT + SIDE_RESERVED;
-    int songY = CARD_TOP + 10;
+    int songY = CARD_TOP + SONG_TOP_OFFSET;
     int songWidth = CARD_WIDTH - (SIDE_RESERVED * 2);
 
     // Measure how tall the song text actually needs to be once wrapped
     // to songWidth, so a short title takes one line and a long title
-    // takes two without the two overlapping the artist line below it.
+    // takes two without overlapping the artist line below it.
     RECT calcRect = { 0, 0, songWidth, 0 };
     HDC hdc = GetDC(parent);
     HFONT oldFont = (HFONT)SelectObject(hdc, g_hFontSong);
@@ -177,7 +140,7 @@ void CreateHeaderControls(HWND parent, HINSTANCE hInstance)
 
     // Artist name starts right where the (possibly wrapped) song text
     // actually ends, so it never overlaps regardless of song length.
-    int artistY = songY + songHeight + 6;
+    int artistY = songY + songHeight + ARTIST_GAP;
     HWND hStaticArtist = CreateWindowW(
         L"STATIC", ARTIST_NAME,
         WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOPREFIX,
@@ -199,67 +162,59 @@ void CreateHeaderControls(HWND parent, HINSTANCE hInstance)
     // Every control in this row is a different size, so instead of giving
     // them all the same y, we pick one horizontal center line for the row
     // and place each control so its own vertical center sits on that line.
-    int rowCenterY = CARD_TOP + CARD_HEIGHT - 40;
+    int rowCenterY = CARD_TOP + CARD_HEIGHT - FOOTER_ROW_OFFSET_FROM_BOTTOM;
+    int refY = rowCenterY - FOOTER_ICON_SIZE / 2;
 
-    int iconSize = 44;   // REF / ST box size
-    int refY = rowCenterY - iconSize / 2;
-
-    // Refresh: borderless icon label, far left of card
     HWND hBtnRefresh = CreateWindowW(
         L"STATIC", L"\u21BB",
         WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY | SS_NOPREFIX,
-        CARD_LEFT + 10, refY, iconSize, iconSize,
+        CARD_LEFT + FOOTER_ICON_MARGIN, refY, FOOTER_ICON_SIZE, FOOTER_ICON_SIZE,
         parent, (HMENU)ID_BTN_REFRESH, hInstance, nullptr);
     SendMessageW(hBtnRefresh, WM_SETFONT, (WPARAM)g_hFontIconLarge, TRUE);
 
-    // Settings: borderless icon label, far right of card
     HWND hBtnSettings = CreateWindowW(
         L"STATIC", L"\u2699",
         WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY | SS_NOPREFIX,
-        CARD_LEFT + CARD_WIDTH - 10 - iconSize, refY, iconSize, iconSize,
+        CARD_LEFT + CARD_WIDTH - FOOTER_ICON_MARGIN - FOOTER_ICON_SIZE, refY, FOOTER_ICON_SIZE, FOOTER_ICON_SIZE,
         parent, (HMENU)ID_BTN_SETTINGS, hInstance, nullptr);
     SendMessageW(hBtnSettings, WM_SETFONT, (WPARAM)g_hFontIconLarge, TRUE);
 
     // Offset cluster, centered within the card. Buttons stay as real
     // BUTTON controls so the visible border stays, matching the reference.
-    // Gaps between elements are fixed values (5, 2, 2) below; clusterWidth
-    // must add up to exactly the same total or the centering math is off.
-    int labelW = 60, labelH = 28;
-    int btnSize = 28;
-    int editW = 40, editH = 25;
-    int gap1 = 5, gap2 = 2, gap3 = 2;
-    int clusterWidth = labelW + gap1 + btnSize + gap2 + editW + gap3 + btnSize;
-    int clusterX = CARD_LEFT + (CARD_WIDTH - clusterWidth) / 2;
-    int cx = clusterX;
+    int clusterWidth = OFFSET_LABEL_WIDTH + OFFSET_GAP_LABEL_TO_MINUS
+                      + OFFSET_BTN_SIZE + OFFSET_GAP_MINUS_TO_EDIT
+                      + OFFSET_EDIT_WIDTH + OFFSET_GAP_EDIT_TO_PLUS
+                      + OFFSET_BTN_SIZE;
+    int cx = CARD_LEFT + (CARD_WIDTH - clusterWidth) / 2;
 
     HWND hLblOffset = CreateWindowW(
         L"STATIC", L"Offset:",
         WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX,
-        cx, rowCenterY - labelH / 2, labelW, labelH,
+        cx, rowCenterY - OFFSET_LABEL_HEIGHT / 2, OFFSET_LABEL_WIDTH, OFFSET_LABEL_HEIGHT,
         parent, (HMENU)ID_STATIC_OFFSET_LBL, hInstance, nullptr);
     SendMessageW(hLblOffset, WM_SETFONT, (WPARAM)g_hFontLabel, TRUE);
-    cx += labelW + gap1;
+    cx += OFFSET_LABEL_WIDTH + OFFSET_GAP_LABEL_TO_MINUS;
 
     HWND hBtnMinus = CreateWindowW(
         L"BUTTON", L"-",
         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        cx, rowCenterY - btnSize / 2, btnSize, btnSize,
+        cx, rowCenterY - OFFSET_BTN_SIZE / 2, OFFSET_BTN_SIZE, OFFSET_BTN_SIZE,
         parent, (HMENU)ID_BTN_OFFSET_MINUS, hInstance, nullptr);
     SendMessageW(hBtnMinus, WM_SETFONT, (WPARAM)g_hFontLabel, TRUE);
-    cx += btnSize + gap2;
+    cx += OFFSET_BTN_SIZE + OFFSET_GAP_MINUS_TO_EDIT;
 
     HWND hEditOffset = CreateWindowW(
         L"EDIT", OFFSET_VALUE,
         WS_CHILD | WS_VISIBLE | WS_BORDER | ES_CENTER | ES_READONLY,
-        cx, rowCenterY - editH / 2, editW, editH,
+        cx, rowCenterY - OFFSET_EDIT_HEIGHT / 2, OFFSET_EDIT_WIDTH, OFFSET_EDIT_HEIGHT,
         parent, (HMENU)ID_EDIT_OFFSET, hInstance, nullptr);
     SendMessageW(hEditOffset, WM_SETFONT, (WPARAM)g_hFontLabel, TRUE);
-    cx += editW + gap3;
+    cx += OFFSET_EDIT_WIDTH + OFFSET_GAP_EDIT_TO_PLUS;
 
     HWND hBtnPlus = CreateWindowW(
         L"BUTTON", L"+",
         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        cx, rowCenterY - btnSize / 2, btnSize, btnSize,
+        cx, rowCenterY - OFFSET_BTN_SIZE / 2, OFFSET_BTN_SIZE, OFFSET_BTN_SIZE,
         parent, (HMENU)ID_BTN_OFFSET_PLUS, hInstance, nullptr);
     SendMessageW(hBtnPlus, WM_SETFONT, (WPARAM)g_hFontLabel, TRUE);
 }
@@ -275,7 +230,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             return 0;
         }
 
-        // Paint the rounded header card (#16213e) near the top of the window.
+        // Paint the rounded header card near the top of the window.
         case WM_PAINT:
         {
             PAINTSTRUCT ps;
@@ -308,22 +263,22 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             SetBkMode(hdcStatic, TRANSPARENT);
 
             if (ctrlId == ID_STATIC_SONG)
-                SetTextColor(hdcStatic, RGB(0xe0, 0x5a, 0x6e)); // accent pink/red
+                SetTextColor(hdcStatic, APP_COLOR_SONG_TEXT);
             else if (ctrlId == ID_STATIC_ARTIST)
-                SetTextColor(hdcStatic, RGB(0xa0, 0xa0, 0xb0)); // muted gray
+                SetTextColor(hdcStatic, APP_COLOR_ARTIST_TEXT);
             else
-                SetTextColor(hdcStatic, RGB(0xf0, 0xf0, 0xf0)); // white icons/labels
+                SetTextColor(hdcStatic, APP_COLOR_LIGHT_TEXT);
 
             return (LRESULT)g_hbrCard;
         }
 
-        // EDIT control (the "0.3" offset value box): white background,
-        // dark text, matching the screenshot's white pill.
+        // EDIT control (the offset value box): white background,
+        // dark text, matching the reference screenshot's white pill.
         case WM_CTLCOLOREDIT:
         {
             HDC hdcEdit = (HDC)wParam;
-            SetTextColor(hdcEdit, RGB(0x1a, 0x1a, 0x2e));
-            SetBkColor(hdcEdit, RGB(0xff, 0xff, 0xff));
+            SetTextColor(hdcEdit, APP_COLOR_EDIT_TEXT);
+            SetBkColor(hdcEdit, APP_COLOR_EDIT_BG);
             return (LRESULT)g_hbrEditBg;
         }
 
