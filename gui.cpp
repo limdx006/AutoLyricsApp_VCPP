@@ -32,6 +32,10 @@ static bool g_hoverPrev     = false;
 static bool g_hoverPlayPause = false;
 static bool g_hoverNext     = false;
 
+// Play/Pause toggle state. true = currently playing (shows pause button \u23F8)
+// false = currently paused (shows play button \u25B6)
+static bool g_isPlaying = true;
+
 // Shared subclass procedure for icon labels. dwRefData carries
 // the address of that control's own hover flag, so one function can
 // serve all of them without needing to branch on control ID.
@@ -70,6 +74,7 @@ LRESULT CALLBACK IconHoverSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 void CreateHeaderControls(HWND parent, HINSTANCE hInstance);
 void CreateBottomControls(HWND parent, HINSTANCE hInstance);
+void TogglePlayPause(HWND hwnd);
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 {
@@ -324,7 +329,8 @@ void CreateBottomControls(HWND parent, HINSTANCE hInstance)
     SetWindowSubclass(hBtnPrev, IconHoverSubclassProc, 4, (DWORD_PTR)&g_hoverPrev);
     controlsX += PLAY_ICON_SIZE + PLAY_ICON_GAP;
 
-    // Play/Pause: \u23F8 (pause symbol - two vertical bars)
+    // Play/Pause: starts as pause (\u23F8) since g_isPlaying defaults to true.
+    // The text is updated dynamically via TogglePlayPause().
     HWND hBtnPlayPause = CreateWindowW(
         L"STATIC", L"\u23F8",
         WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY | SS_NOPREFIX,
@@ -351,6 +357,28 @@ void CreateBottomControls(HWND parent, HINSTANCE hInstance)
         CARD_LEFT, statusY, CARD_WIDTH, STATUS_TEXT_HEIGHT,
         parent, (HMENU)ID_STATIC_STATUS, hInstance, nullptr);
     SendMessageW(hStaticStatus, WM_SETFONT, (WPARAM)g_hFontStatus, TRUE);
+}
+
+// Toggle the play/pause button text and the playing state.
+// When playing -> show pause symbol (\u23F8), when paused -> show play triangle (\u25B6).
+void TogglePlayPause(HWND hwnd)
+{
+    g_isPlaying = !g_isPlaying;
+
+    HWND hBtn = GetDlgItem(hwnd, ID_BTN_PLAY_PAUSE);
+    if (hBtn)
+    {
+        const wchar_t* newText = g_isPlaying ? L"\u23F8" : L"\u25B6";
+        SetWindowTextW(hBtn, newText);
+    }
+
+    // Also update the status text below
+    HWND hStatus = GetDlgItem(hwnd, ID_STATIC_STATUS);
+    if (hStatus)
+    {
+        const wchar_t* newStatus = g_isPlaying ? L"Playing" : L"Paused";
+        SetWindowTextW(hStatus, newStatus);
+    }
 }
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -495,9 +523,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 case ID_BTN_OFFSET_MINUS:
                 case ID_BTN_OFFSET_PLUS:
                 case ID_BTN_PREV:
-                case ID_BTN_PLAY_PAUSE:
                 case ID_BTN_NEXT:
                     // TODO: hook up functionality later
+                    break;
+
+                case ID_BTN_PLAY_PAUSE:
+                    TogglePlayPause(hwnd);
                     break;
             }
             return 0;
