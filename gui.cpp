@@ -19,6 +19,12 @@ constexpr int CARD_WIDTH    = WINDOW_WIDTH - (CARD_MARGIN * 2);
 constexpr int CARD_HEIGHT   = 180;
 constexpr int CARD_RADIUS   = 24;   // corner rounding
 
+// PTT sits at the top-right of the card, reserving equal blank space at
+// the top-left so the song name text stays centered between the two.
+constexpr int PTT_SIZE   = 40;
+constexpr int PTT_MARGIN = 10;                     // gap from card edge to PTT box
+constexpr int SIDE_RESERVED = PTT_SIZE + PTT_MARGIN; // total space kept clear on each side
+
 // Control IDs
 #define ID_BTN_PTT          101   // Pin-To-Top
 #define ID_BTN_REFRESH       102
@@ -36,14 +42,14 @@ static const wchar_t* ARTIST_NAME  = L"Unknown Artist";
 static const wchar_t* OFFSET_VALUE = L"0.3";
 
 // Globals
-static HBRUSH g_hbrBackground = nullptr;   // main window bg: #1a1a2e
-static HBRUSH g_hbrCard       = nullptr;   // card bg:        #16213e
-static HBRUSH g_hbrEditBg     = nullptr;   // offset value box: white
-static HFONT  g_hFontSong     = nullptr;
-static HFONT  g_hFontArtist   = nullptr;
-static HFONT  g_hFontIcon     = nullptr;
+static HBRUSH g_hbrBackground  = nullptr;   // main window bg: #1a1a2e
+static HBRUSH g_hbrCard        = nullptr;   // card bg:        #16213e
+static HBRUSH g_hbrEditBg      = nullptr;   // offset value box: white
+static HFONT  g_hFontSong      = nullptr;
+static HFONT  g_hFontArtist    = nullptr;
+static HFONT  g_hFontIcon      = nullptr;
 static HFONT  g_hFontIconLarge = nullptr;
-static HFONT  g_hFontLabel    = nullptr;
+static HFONT  g_hFontLabel     = nullptr;
 
 // Forward declarations
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -126,9 +132,9 @@ void CreateHeaderControls(HWND parent, HINSTANCE hInstance)
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
         CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
 
-    // Icon glyphs for the pin label (kept smaller, near the song name)
+    // Icon glyph for the pin label
     g_hFontIcon = CreateFontW(
-        16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        40, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
         CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI Symbol");
 
@@ -144,33 +150,50 @@ void CreateHeaderControls(HWND parent, HINSTANCE hInstance)
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
         CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
 
-    // Pin-To-Top: a plain SS_NOTIFY static label instead of a BUTTON.
-    // STATIC controls have no border/face of their own, so this gives a
-    // borderless, icon-only look while still receiving click notifications
-    // (STN_CLICKED) through WM_COMMAND, same as a real button would.
-    // Positioned a bit lower so it sits roughly level with the song name.
-    HWND hBtnPTT = CreateWindowW(
-        L"STATIC", L"\u2606",
-        WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY | SS_NOPREFIX,
-        CARD_LEFT + CARD_WIDTH - 40, CARD_TOP + 10, 28, 28,
-        parent, (HMENU)ID_BTN_PTT, hInstance, nullptr);
-    SendMessageW(hBtnPTT, WM_SETFONT, (WPARAM)g_hFontIcon, TRUE);
+    // Song name area is inset by SIDE_RESERVED on both sides: the right
+    // inset leaves room for the PTT icon, the left inset is left blank
+    // to match, so the text block stays visually centered on the card.
+    int songX = CARD_LEFT + SIDE_RESERVED;
+    int songY = CARD_TOP + 10;
+    int songWidth = CARD_WIDTH - (SIDE_RESERVED * 2);
 
-    // Song name, up to 2 lines, centered
+    // Measure how tall the song text actually needs to be once wrapped
+    // to songWidth, so a short title takes one line and a long title
+    // takes two without the two overlapping the artist line below it.
+    RECT calcRect = { 0, 0, songWidth, 0 };
+    HDC hdc = GetDC(parent);
+    HFONT oldFont = (HFONT)SelectObject(hdc, g_hFontSong);
+    DrawTextW(hdc, SONG_NAME, -1, &calcRect, DT_CALCRECT | DT_WORDBREAK | DT_CENTER);
+    SelectObject(hdc, oldFont);
+    ReleaseDC(parent, hdc);
+    int songHeight = calcRect.bottom - calcRect.top;
+
     HWND hStaticSong = CreateWindowW(
         L"STATIC", SONG_NAME,
         WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOPREFIX,
-        CARD_LEFT + 20, CARD_TOP + 10, CARD_WIDTH - 40, 56,
+        songX, songY, songWidth, songHeight,
         parent, (HMENU)ID_STATIC_SONG, hInstance, nullptr);
     SendMessageW(hStaticSong, WM_SETFONT, (WPARAM)g_hFontSong, TRUE);
 
-    // Artist name, centered, below song block
+    // Artist name starts right where the (possibly wrapped) song text
+    // actually ends, so it never overlaps regardless of song length.
+    int artistY = songY + songHeight + 6;
     HWND hStaticArtist = CreateWindowW(
         L"STATIC", ARTIST_NAME,
         WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOPREFIX,
-        CARD_LEFT + 20, CARD_TOP + 56 + 6, CARD_WIDTH - 40, 22,
+        CARD_LEFT + 20, artistY, CARD_WIDTH - 40, 22,
         parent, (HMENU)ID_STATIC_ARTIST, hInstance, nullptr);
     SendMessageW(hStaticArtist, WM_SETFONT, (WPARAM)g_hFontArtist, TRUE);
+
+    // Pin-To-Top: created after the song/artist controls so it's on top
+    // in z-order, and its box sits entirely inside the space reserved by
+    // SIDE_RESERVED so the song text can never paint over it.
+    HWND hBtnPTT = CreateWindowW(
+        L"STATIC", L"\u2606",
+        WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY | SS_NOPREFIX,
+        CARD_LEFT + CARD_WIDTH - PTT_MARGIN - PTT_SIZE, songY, PTT_SIZE, PTT_SIZE,
+        parent, (HMENU)ID_BTN_PTT, hInstance, nullptr);
+    SendMessageW(hBtnPTT, WM_SETFONT, (WPARAM)g_hFontIcon, TRUE);
 
     // Footer row: REF | Offset: - 0.3 + | ST
     // Every control in this row is a different size, so instead of giving
@@ -199,10 +222,13 @@ void CreateHeaderControls(HWND parent, HINSTANCE hInstance)
 
     // Offset cluster, centered within the card. Buttons stay as real
     // BUTTON controls so the visible border stays, matching the reference.
+    // Gaps between elements are fixed values (5, 2, 2) below; clusterWidth
+    // must add up to exactly the same total or the centering math is off.
     int labelW = 60, labelH = 28;
     int btnSize = 28;
     int editW = 40, editH = 25;
-    int clusterWidth = labelW + 30 + btnSize + editW + btnSize;
+    int gap1 = 5, gap2 = 2, gap3 = 2;
+    int clusterWidth = labelW + gap1 + btnSize + gap2 + editW + gap3 + btnSize;
     int clusterX = CARD_LEFT + (CARD_WIDTH - clusterWidth) / 2;
     int cx = clusterX;
 
@@ -212,7 +238,7 @@ void CreateHeaderControls(HWND parent, HINSTANCE hInstance)
         cx, rowCenterY - labelH / 2, labelW, labelH,
         parent, (HMENU)ID_STATIC_OFFSET_LBL, hInstance, nullptr);
     SendMessageW(hLblOffset, WM_SETFONT, (WPARAM)g_hFontLabel, TRUE);
-    cx += labelW + 5;
+    cx += labelW + gap1;
 
     HWND hBtnMinus = CreateWindowW(
         L"BUTTON", L"-",
@@ -220,7 +246,7 @@ void CreateHeaderControls(HWND parent, HINSTANCE hInstance)
         cx, rowCenterY - btnSize / 2, btnSize, btnSize,
         parent, (HMENU)ID_BTN_OFFSET_MINUS, hInstance, nullptr);
     SendMessageW(hBtnMinus, WM_SETFONT, (WPARAM)g_hFontLabel, TRUE);
-    cx += btnSize + 2;
+    cx += btnSize + gap2;
 
     HWND hEditOffset = CreateWindowW(
         L"EDIT", OFFSET_VALUE,
@@ -228,7 +254,7 @@ void CreateHeaderControls(HWND parent, HINSTANCE hInstance)
         cx, rowCenterY - editH / 2, editW, editH,
         parent, (HMENU)ID_EDIT_OFFSET, hInstance, nullptr);
     SendMessageW(hEditOffset, WM_SETFONT, (WPARAM)g_hFontLabel, TRUE);
-    cx += editW + 2;
+    cx += editW + gap3;
 
     HWND hBtnPlus = CreateWindowW(
         L"BUTTON", L"+",
@@ -320,14 +346,14 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         }
 
         case WM_DESTROY:
-            if (g_hbrBackground) { DeleteObject(g_hbrBackground); g_hbrBackground = nullptr; }
-            if (g_hbrCard)       { DeleteObject(g_hbrCard);       g_hbrCard = nullptr; }
-            if (g_hbrEditBg)     { DeleteObject(g_hbrEditBg);     g_hbrEditBg = nullptr; }
-            if (g_hFontSong)     { DeleteObject(g_hFontSong);     g_hFontSong = nullptr; }
-            if (g_hFontArtist)   { DeleteObject(g_hFontArtist);   g_hFontArtist = nullptr; }
-            if (g_hFontIcon)     { DeleteObject(g_hFontIcon);     g_hFontIcon = nullptr; }
+            if (g_hbrBackground)  { DeleteObject(g_hbrBackground);  g_hbrBackground = nullptr; }
+            if (g_hbrCard)        { DeleteObject(g_hbrCard);        g_hbrCard = nullptr; }
+            if (g_hbrEditBg)      { DeleteObject(g_hbrEditBg);      g_hbrEditBg = nullptr; }
+            if (g_hFontSong)      { DeleteObject(g_hFontSong);      g_hFontSong = nullptr; }
+            if (g_hFontArtist)    { DeleteObject(g_hFontArtist);    g_hFontArtist = nullptr; }
+            if (g_hFontIcon)      { DeleteObject(g_hFontIcon);      g_hFontIcon = nullptr; }
             if (g_hFontIconLarge) { DeleteObject(g_hFontIconLarge); g_hFontIconLarge = nullptr; }
-            if (g_hFontLabel)    { DeleteObject(g_hFontLabel);    g_hFontLabel = nullptr; }
+            if (g_hFontLabel)     { DeleteObject(g_hFontLabel);     g_hFontLabel = nullptr; }
             PostQuitMessage(0);
             return 0;
     }

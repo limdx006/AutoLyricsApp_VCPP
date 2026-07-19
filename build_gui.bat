@@ -5,4 +5,6 @@ cd /d D:\Personal_GitHub_rep\AutoLyricsApp_VCPP
 
 cl /EHsc gui.cpp /link user32.lib gdi32.lib
 
+.\gui.exe
+
 pause
