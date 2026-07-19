@@ -6,6 +6,7 @@
 #endif
 
 #include <windows.h>
+#include <commctrl.h>
 #include "components/config.h"
 
 // Globals
@@ -17,6 +18,47 @@ static HFONT  g_hFontArtist    = nullptr;
 static HFONT  g_hFontIcon      = nullptr;
 static HFONT  g_hFontIconLarge = nullptr;
 static HFONT  g_hFontLabel     = nullptr;
+
+// Hover state for the three icon labels (PTT, Refresh, Settings).
+// STATIC controls don't report hover on their own, so each one gets
+// subclassed below to watch WM_MOUSEMOVE / WM_MOUSELEAVE directly.
+static bool g_hoverPTT      = false;
+static bool g_hoverRefresh  = false;
+static bool g_hoverSettings = false;
+
+// Shared subclass procedure for all three icon labels. dwRefData carries
+// the address of that control's own hover flag, so one function can
+// serve all three without needing to branch on control ID.
+LRESULT CALLBACK IconHoverSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam,
+                                        UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
+{
+    bool* hoverFlag = (bool*)dwRefData;
+
+    switch (msg)
+    {
+        case WM_MOUSEMOVE:
+            if (!*hoverFlag)
+            {
+                *hoverFlag = true;
+                TRACKMOUSEEVENT tme = { sizeof(tme) };
+                tme.dwFlags = TME_LEAVE;
+                tme.hwndTrack = hwnd;
+                TrackMouseEvent(&tme);
+                InvalidateRect(hwnd, nullptr, TRUE);
+            }
+            break;
+
+        case WM_MOUSELEAVE:
+            *hoverFlag = false;
+            InvalidateRect(hwnd, nullptr, TRUE);
+            break;
+
+        case WM_NCDESTROY:
+            RemoveWindowSubclass(hwnd, IconHoverSubclassProc, uIdSubclass);
+            break;
+    }
+    return DefSubclassProc(hwnd, msg, wParam, lParam);
+}
 
 // Forward declarations
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -157,6 +199,7 @@ void CreateHeaderControls(HWND parent, HINSTANCE hInstance)
         CARD_LEFT + CARD_WIDTH - PTT_MARGIN - PTT_SIZE, songY, PTT_SIZE, PTT_SIZE,
         parent, (HMENU)ID_BTN_PTT, hInstance, nullptr);
     SendMessageW(hBtnPTT, WM_SETFONT, (WPARAM)g_hFontIcon, TRUE);
+    SetWindowSubclass(hBtnPTT, IconHoverSubclassProc, 1, (DWORD_PTR)&g_hoverPTT);
 
     // Footer row: REF | Offset: - 0.3 + | ST
     // Every control in this row is a different size, so instead of giving
@@ -171,6 +214,7 @@ void CreateHeaderControls(HWND parent, HINSTANCE hInstance)
         CARD_LEFT + FOOTER_ICON_MARGIN, refY, FOOTER_ICON_SIZE, FOOTER_ICON_SIZE,
         parent, (HMENU)ID_BTN_REFRESH, hInstance, nullptr);
     SendMessageW(hBtnRefresh, WM_SETFONT, (WPARAM)g_hFontIconLarge, TRUE);
+    SetWindowSubclass(hBtnRefresh, IconHoverSubclassProc, 2, (DWORD_PTR)&g_hoverRefresh);
 
     HWND hBtnSettings = CreateWindowW(
         L"STATIC", L"\u2699",
@@ -178,6 +222,7 @@ void CreateHeaderControls(HWND parent, HINSTANCE hInstance)
         CARD_LEFT + CARD_WIDTH - FOOTER_ICON_MARGIN - FOOTER_ICON_SIZE, refY, FOOTER_ICON_SIZE, FOOTER_ICON_SIZE,
         parent, (HMENU)ID_BTN_SETTINGS, hInstance, nullptr);
     SendMessageW(hBtnSettings, WM_SETFONT, (WPARAM)g_hFontIconLarge, TRUE);
+    SetWindowSubclass(hBtnSettings, IconHoverSubclassProc, 3, (DWORD_PTR)&g_hoverSettings);
 
     // Offset cluster, centered within the card. Buttons stay as real
     // BUTTON controls so the visible border stays, matching the reference.
@@ -266,6 +311,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 SetTextColor(hdcStatic, APP_COLOR_SONG_TEXT);
             else if (ctrlId == ID_STATIC_ARTIST)
                 SetTextColor(hdcStatic, APP_COLOR_ARTIST_TEXT);
+            else if (ctrlId == ID_BTN_PTT && g_hoverPTT)
+                SetTextColor(hdcStatic, APP_COLOR_ICON_HOVER);
+            else if (ctrlId == ID_BTN_REFRESH && g_hoverRefresh)
+                SetTextColor(hdcStatic, APP_COLOR_ICON_HOVER);
+            else if (ctrlId == ID_BTN_SETTINGS && g_hoverSettings)
+                SetTextColor(hdcStatic, APP_COLOR_ICON_HOVER);
             else
                 SetTextColor(hdcStatic, APP_COLOR_LIGHT_TEXT);
 

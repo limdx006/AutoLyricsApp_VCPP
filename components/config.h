@@ -66,6 +66,7 @@ extern const COLORREF APP_COLOR_SONG_TEXT;    // song name accent color
 extern const COLORREF APP_COLOR_ARTIST_TEXT;  // artist name color
 extern const COLORREF APP_COLOR_LIGHT_TEXT;   // icon labels / offset label color
 extern const COLORREF APP_COLOR_EDIT_TEXT;    // offset value text color
+extern const COLORREF APP_COLOR_ICON_HOVER;   // PTT/Refresh/Settings hover color
 
 // Hardcoded display text (temporary, until real song data is wired up)
 extern const wchar_t* const SONG_NAME;

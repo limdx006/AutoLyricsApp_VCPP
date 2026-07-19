@@ -44,6 +44,7 @@ const COLORREF APP_COLOR_SONG_TEXT   = RGB(0xe0, 0x5a, 0x6e);
 const COLORREF APP_COLOR_ARTIST_TEXT = RGB(0xa0, 0xa0, 0xb0);
 const COLORREF APP_COLOR_LIGHT_TEXT  = RGB(0xf0, 0xf0, 0xf0);
 const COLORREF APP_COLOR_EDIT_TEXT   = RGB(0x1a, 0x1a, 0x2e);
+const COLORREF APP_COLOR_ICON_HOVER  = RGB(0x4c, 0xc9, 0xf0);
 
 const wchar_t* const SONG_NAME    = L"Song Name Goes Here";
 const wchar_t* const ARTIST_NAME  = L"Unknown Artist";
