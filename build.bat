@@ -13,6 +13,8 @@ components\*.cpp ^
 /I"D:\Personal_GitHub_rep\AutoLyricsApp_VCPP\vcpkg\installed\x64-windows\include" ^
 /link ^
 windowsapp.lib
+
+.\main.exe
  
 pause
  

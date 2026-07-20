@@ -21,11 +21,16 @@ int main() {
 
     MediaSessionInfo media = get_media_session_info();
 
-    if (media.success)
+    if (media.is_success)
     {
         cout << "Now Playing: " << media.title << " by " << media.artist << endl;
         cout << "Fetching lyrics..." << "\n";
- 
+
+        cout << "Position : " << media.position << endl;
+        cout << "Duration : " << media.duration << endl;
+        
+        cout << "Playing  : " << media.is_playing << endl;
+
         string response = get_lyrics(media.title, media.artist);
         json j = json::parse(response);
         if (j["success"]) {
