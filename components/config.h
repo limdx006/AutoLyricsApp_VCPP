@@ -22,6 +22,14 @@
 #define ID_BTN_PLAY_PAUSE    114
 #define ID_BTN_NEXT          115
 
+// Language bar controls
+#define ID_STATIC_LANG_LABEL     116
+#define ID_STATIC_LANG_VALUE     117
+#define ID_STATIC_CURRENT_LABEL  118
+#define ID_STATIC_CURRENT_VALUE  119
+#define ID_STATIC_MODE_LABEL     120
+#define ID_STATIC_MODE_VALUE     121
+
 // Window size
 extern const int WINDOW_WIDTH;
 extern const int WINDOW_HEIGHT;
@@ -57,6 +65,13 @@ extern const int OFFSET_GAP_LABEL_TO_MINUS;
 extern const int OFFSET_GAP_MINUS_TO_EDIT;
 extern const int OFFSET_GAP_EDIT_TO_PLUS;
 
+// Language bar layout (2-row info bar below header card)
+extern const int LANG_BAR_TOP;
+extern const int LANG_BAR_HEIGHT;
+extern const int LANG_BAR_MARGIN;       // horizontal inset from card edges
+extern const int LANG_BAR_ROW1_OFFSET;  // vertical offset of top row from bar top
+extern const int LANG_BAR_ROW2_OFFSET;  // vertical offset of bottom row from bar top
+
 // Bottom card layout
 extern const int BOTTOM_CARD_HEIGHT;
 extern const int BOTTOM_CARD_TOP;
@@ -79,6 +94,7 @@ extern const int FONT_SIZE_ICON_LARGE;
 extern const int FONT_SIZE_LABEL;
 extern const int FONT_SIZE_TIME;
 extern const int FONT_SIZE_STATUS;
+extern const int FONT_SIZE_LANG;    // language bar (slightly smaller than artist)
 extern const wchar_t* const FONT_FACE_UI;
 extern const wchar_t* const FONT_FACE_SYMBOL;
 
@@ -100,3 +116,12 @@ extern const wchar_t* const OFFSET_VALUE;
 extern const wchar_t* const CURRENT_TIME;
 extern const wchar_t* const END_TIME;
 extern const wchar_t* const STATUS_TEXT;
+
+// Language bar display text
+extern const wchar_t* const LANG_LABEL_TEXT;
+extern const wchar_t* const LANG_VALUE_TEXT;
+extern const wchar_t* const CURRENT_LABEL_TEXT;
+extern const wchar_t* const CURRENT_VALUE_TEXT;
+extern const wchar_t* const MODE_LABEL_TEXT;
+extern const wchar_t* const MODE_VALUE_TEXT;
+

@@ -29,6 +29,13 @@ const int OFFSET_GAP_LABEL_TO_MINUS = 5;
 const int OFFSET_GAP_MINUS_TO_EDIT  = 2;
 const int OFFSET_GAP_EDIT_TO_PLUS   = 2;
 
+// Language bar: sits just below the header card with a small gap
+const int LANG_BAR_TOP         = CARD_TOP + CARD_HEIGHT + 5;
+const int LANG_BAR_HEIGHT      = 40;
+const int LANG_BAR_MARGIN      = 5;   // horizontal inset for text
+const int LANG_BAR_ROW1_OFFSET = 5;    // top row (labels) from bar top
+const int LANG_BAR_ROW2_OFFSET = 22;   // bottom row (values) from bar top
+
 // Bottom card layout
 const int BOTTOM_CARD_HEIGHT        = 90;
 const int BOTTOM_CARD_TOP           = WINDOW_HEIGHT - BOTTOM_CARD_HEIGHT - CARD_MARGIN;
@@ -50,6 +57,7 @@ const int FONT_SIZE_ICON_LARGE = 40;
 const int FONT_SIZE_LABEL      = 25;
 const int FONT_SIZE_TIME       = 14;
 const int FONT_SIZE_STATUS     = 14;
+const int FONT_SIZE_LANG       = 14;   // slightly smaller than artist (15)
 
 const wchar_t* const FONT_FACE_UI     = L"Segoe UI";
 const wchar_t* const FONT_FACE_SYMBOL = L"Segoe UI Symbol";
@@ -70,3 +78,12 @@ const wchar_t* const OFFSET_VALUE = L"0.3";
 const wchar_t* const CURRENT_TIME = L"02:24";
 const wchar_t* const END_TIME     = L"02:51";
 const wchar_t* const STATUS_TEXT  = L"Playing";
+
+// Language bar hardcoded text
+const wchar_t* const LANG_LABEL_TEXT    = L"Language:";
+const wchar_t* const LANG_VALUE_TEXT    = L"Chinese";
+const wchar_t* const CURRENT_LABEL_TEXT = L"Current:";
+const wchar_t* const CURRENT_VALUE_TEXT = L"PinYin";
+const wchar_t* const MODE_LABEL_TEXT    = L"[  Original  ]";
+const wchar_t* const MODE_VALUE_TEXT    = L"[ Translated ]";
+

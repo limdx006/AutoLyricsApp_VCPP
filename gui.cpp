@@ -21,6 +21,7 @@ static HFONT  g_hFontIconLarge = nullptr;
 static HFONT  g_hFontLabel     = nullptr;
 static HFONT  g_hFontTime      = nullptr;
 static HFONT  g_hFontStatus    = nullptr;
+static HFONT  g_hFontLang      = nullptr;   // language bar font
 
 // Hover state for icon labels.
 // Header section
@@ -32,8 +33,8 @@ static bool g_hoverPrev     = false;
 static bool g_hoverPlayPause = false;
 static bool g_hoverNext     = false;
 
-// Play/Pause toggle state. true = currently playing (shows pause button \u23F8)
-// false = currently paused (shows play button \u25B6)
+// Play/Pause toggle state. true = currently playing (shows pause button ⏸)
+// false = currently paused (shows play button ▶)
 static bool g_isPlaying = true;
 
 // Shared subclass procedure for icon labels. dwRefData carries
@@ -73,6 +74,7 @@ LRESULT CALLBACK IconHoverSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
 // Forward declarations
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 void CreateHeaderControls(HWND parent, HINSTANCE hInstance);
+void CreateLanguageBarControls(HWND parent, HINSTANCE hInstance);
 void CreateBottomControls(HWND parent, HINSTANCE hInstance);
 void TogglePlayPause(HWND hwnd);
 
@@ -277,6 +279,73 @@ void CreateHeaderControls(HWND parent, HINSTANCE hInstance)
     SendMessageW(hBtnPlus, WM_SETFONT, (WPARAM)g_hFontLabel, TRUE);
 }
 
+void CreateLanguageBarControls(HWND parent, HINSTANCE hInstance)
+{
+    // Language bar font: slightly smaller than artist name
+    g_hFontLang = CreateFontW(
+        FONT_SIZE_LANG, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, FONT_FACE_UI);
+
+    // The language bar is divided into 3 columns, each centered within its third.
+    // Column 1 (left):  Language: / Chinese
+    // Column 2 (center): Current: / PinYin
+    // Column 3 (right):  Original / Translated
+    int colWidth = CARD_WIDTH / 3;
+
+    int row1Y = LANG_BAR_TOP + LANG_BAR_ROW1_OFFSET;
+    int row2Y = LANG_BAR_TOP + LANG_BAR_ROW2_OFFSET;
+    int textHeight = FONT_SIZE_LANG + 4;  // small padding for clean vertical centering
+
+    // --- Column 1: Language ---
+    int col1X = CARD_LEFT;
+    HWND hLangLabel = CreateWindowW(
+        L"STATIC", LANG_LABEL_TEXT,
+        WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOPREFIX,
+        col1X, row1Y, colWidth, textHeight,
+        parent, (HMENU)ID_STATIC_LANG_LABEL, hInstance, nullptr);
+    SendMessageW(hLangLabel, WM_SETFONT, (WPARAM)g_hFontLang, TRUE);
+
+    HWND hLangValue = CreateWindowW(
+        L"STATIC", LANG_VALUE_TEXT,
+        WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOPREFIX,
+        col1X, row2Y, colWidth, textHeight,
+        parent, (HMENU)ID_STATIC_LANG_VALUE, hInstance, nullptr);
+    SendMessageW(hLangValue, WM_SETFONT, (WPARAM)g_hFontLang, TRUE);
+
+    // --- Column 2: Current (centered in the window) ---
+    int col2X = CARD_LEFT + colWidth;
+    HWND hCurrentLabel = CreateWindowW(
+        L"STATIC", CURRENT_LABEL_TEXT,
+        WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOPREFIX,
+        col2X, row1Y, colWidth, textHeight,
+        parent, (HMENU)ID_STATIC_CURRENT_LABEL, hInstance, nullptr);
+    SendMessageW(hCurrentLabel, WM_SETFONT, (WPARAM)g_hFontLang, TRUE);
+
+    HWND hCurrentValue = CreateWindowW(
+        L"STATIC", CURRENT_VALUE_TEXT,
+        WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOPREFIX,
+        col2X, row2Y, colWidth, textHeight,
+        parent, (HMENU)ID_STATIC_CURRENT_VALUE, hInstance, nullptr);
+    SendMessageW(hCurrentValue, WM_SETFONT, (WPARAM)g_hFontLang, TRUE);
+
+    // --- Column 3: Mode ---
+    int col3X = CARD_LEFT + (colWidth * 2);
+    HWND hModeLabel = CreateWindowW(
+        L"STATIC", MODE_LABEL_TEXT,
+        WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOPREFIX,
+        col3X, row1Y, colWidth, textHeight,
+        parent, (HMENU)ID_STATIC_MODE_LABEL, hInstance, nullptr);
+    SendMessageW(hModeLabel, WM_SETFONT, (WPARAM)g_hFontLang, TRUE);
+
+    HWND hModeValue = CreateWindowW(
+        L"STATIC", MODE_VALUE_TEXT,
+        WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOPREFIX,
+        col3X, row2Y, colWidth, textHeight,
+        parent, (HMENU)ID_STATIC_MODE_VALUE, hInstance, nullptr);
+    SendMessageW(hModeValue, WM_SETFONT, (WPARAM)g_hFontLang, TRUE);
+}
+
 void CreateBottomControls(HWND parent, HINSTANCE hInstance)
 {
     g_hFontTime = CreateFontW(
@@ -389,6 +458,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         {
             HINSTANCE hInstance = ((LPCREATESTRUCTW)lParam)->hInstance;
             CreateHeaderControls(hwnd, hInstance);
+            CreateLanguageBarControls(hwnd, hInstance);
             CreateBottomControls(hwnd, hInstance);
             return 0;
         }
@@ -407,6 +477,19 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             RoundRect(hdc,
                 CARD_LEFT, CARD_TOP,
                 CARD_LEFT + CARD_WIDTH, CARD_TOP + CARD_HEIGHT,
+                CARD_RADIUS, CARD_RADIUS);
+
+            SelectObject(hdc, oldBrush);
+            SelectObject(hdc, oldPen);
+
+            // --- Language bar ---
+            // Same background as header card, with rounded corners
+            oldBrush = (HBRUSH)SelectObject(hdc, g_hbrCard);
+            oldPen   = (HPEN)SelectObject(hdc, nullPen);
+
+            RoundRect(hdc,
+                CARD_LEFT, LANG_BAR_TOP,
+                CARD_LEFT + CARD_WIDTH, LANG_BAR_TOP + LANG_BAR_HEIGHT,
                 CARD_RADIUS, CARD_RADIUS);
 
             SelectObject(hdc, oldBrush);
@@ -486,15 +569,32 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 SetTextColor(hdcStatic, APP_COLOR_ARTIST_TEXT);
             else if (ctrlId == ID_BTN_PREV || ctrlId == ID_BTN_PLAY_PAUSE || ctrlId == ID_BTN_NEXT)
                 SetTextColor(hdcStatic, APP_COLOR_LIGHT_TEXT);
+            // Language bar: labels use light text, values use artist (grey) text
+            else if (ctrlId == ID_STATIC_LANG_LABEL ||
+                     ctrlId == ID_STATIC_CURRENT_LABEL ||
+                     ctrlId == ID_STATIC_MODE_LABEL)
+                SetTextColor(hdcStatic, APP_COLOR_LIGHT_TEXT);
+            else if (ctrlId == ID_STATIC_LANG_VALUE ||
+                     ctrlId == ID_STATIC_CURRENT_VALUE ||
+                     ctrlId == ID_STATIC_MODE_VALUE)
+                SetTextColor(hdcStatic, APP_COLOR_ARTIST_TEXT);
             else
                 SetTextColor(hdcStatic, APP_COLOR_LIGHT_TEXT);
 
-            // Bottom card controls use background brush; header card controls use card brush
+            // Bottom card controls use background brush; header card and language bar controls use card brush
             if (ctrlId == ID_STATIC_CURR_TIME || ctrlId == ID_STATIC_END_TIME ||
                 ctrlId == ID_STATIC_STATUS || ctrlId == ID_BTN_PREV ||
                 ctrlId == ID_BTN_PLAY_PAUSE || ctrlId == ID_BTN_NEXT)
             {
                 return (LRESULT)g_hbrBackground;
+            }
+
+            // Language bar controls sit on the same card-colored background
+            if (ctrlId == ID_STATIC_LANG_LABEL || ctrlId == ID_STATIC_LANG_VALUE ||
+                ctrlId == ID_STATIC_CURRENT_LABEL || ctrlId == ID_STATIC_CURRENT_VALUE ||
+                ctrlId == ID_STATIC_MODE_LABEL || ctrlId == ID_STATIC_MODE_VALUE)
+            {
+                return (LRESULT)g_hbrCard;
             }
 
             return (LRESULT)g_hbrCard;
@@ -546,8 +646,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             if (g_hFontLabel)     { DeleteObject(g_hFontLabel);     g_hFontLabel = nullptr; }
             if (g_hFontTime)      { DeleteObject(g_hFontTime);      g_hFontTime = nullptr; }
             if (g_hFontStatus)    { DeleteObject(g_hFontStatus);    g_hFontStatus = nullptr; }
+            if (g_hFontLang)      { DeleteObject(g_hFontLang);      g_hFontLang = nullptr; }
             PostQuitMessage(0);
             return 0;
     }
     return DefWindowProcW(hwnd, msg, wParam, lParam);
 }
+
