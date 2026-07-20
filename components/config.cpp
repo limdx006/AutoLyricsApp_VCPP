@@ -36,7 +36,7 @@ const int LANG_BAR_MARGIN      = 5;   // horizontal inset for text
 const int LANG_BAR_ROW1_OFFSET = 5;    // top row (labels) from bar top
 const int LANG_BAR_ROW2_OFFSET = 22;   // bottom row (values) from bar top
 
-// Bottom card layout
+// Bottom card layout (define before lyrics area so it can be referenced)
 const int BOTTOM_CARD_HEIGHT        = 90;
 const int BOTTOM_CARD_TOP           = WINDOW_HEIGHT - BOTTOM_CARD_HEIGHT - CARD_MARGIN;
 const int PROGRESS_BAR_HEIGHT       = 7;
@@ -50,6 +50,12 @@ const int PLAY_ICON_GAP             = 24;
 const int STATUS_TEXT_HEIGHT        = 20;
 const int STATUS_MARGIN_BOTTOM      = 5;
 
+// Lyrics area: reserved space between language bar and bottom card
+const int LYRICS_GAP         = 8;   // gap between lang bar / lyrics area, and lyrics area / bottom card
+const int LYRICS_AREA_TOP    = LANG_BAR_TOP + LANG_BAR_HEIGHT + LYRICS_GAP;
+const int LYRICS_AREA_BOTTOM = BOTTOM_CARD_TOP - LYRICS_GAP;
+const int LYRICS_AREA_HEIGHT = LYRICS_AREA_BOTTOM - LYRICS_AREA_TOP;
+
 const int FONT_SIZE_SONG       = 30;
 const int FONT_SIZE_ARTIST     = 15;
 const int FONT_SIZE_ICON       = 40;
@@ -58,6 +64,7 @@ const int FONT_SIZE_LABEL      = 25;
 const int FONT_SIZE_TIME       = 14;
 const int FONT_SIZE_STATUS     = 14;
 const int FONT_SIZE_LANG       = 14;   // slightly smaller than artist (15)
+const int FONT_SIZE_LYRICS     = 18;   // placeholder for future lyrics display
 
 const wchar_t* const FONT_FACE_UI     = L"Segoe UI";
 const wchar_t* const FONT_FACE_SYMBOL = L"Segoe UI Symbol";
@@ -86,4 +93,3 @@ const wchar_t* const CURRENT_LABEL_TEXT = L"Current:";
 const wchar_t* const CURRENT_VALUE_TEXT = L"PinYin";
 const wchar_t* const MODE_LABEL_TEXT    = L"[  Original  ]";
 const wchar_t* const MODE_VALUE_TEXT    = L"[ Translated ]";
-

@@ -75,6 +75,7 @@ LRESULT CALLBACK IconHoverSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 void CreateHeaderControls(HWND parent, HINSTANCE hInstance);
 void CreateLanguageBarControls(HWND parent, HINSTANCE hInstance);
+void CreateLyricsAreaControls(HWND parent, HINSTANCE hInstance);
 void CreateBottomControls(HWND parent, HINSTANCE hInstance);
 void TogglePlayPause(HWND hwnd);
 
@@ -346,6 +347,17 @@ void CreateLanguageBarControls(HWND parent, HINSTANCE hInstance)
     SendMessageW(hModeValue, WM_SETFONT, (WPARAM)g_hFontLang, TRUE);
 }
 
+void CreateLyricsAreaControls(HWND parent, HINSTANCE hInstance)
+{
+    // Reserved space for lyrics display between the language bar and bottom card.
+    // No controls are created yet -- this function is a placeholder for future
+    // lyrics rendering (e.g. custom-drawn lines, scrollable text, etc.).
+    // The area bounds are defined by LYRICS_AREA_TOP and LYRICS_AREA_HEIGHT
+    // in config.cpp so the layout is already locked in.
+    UNREFERENCED_PARAMETER(parent);
+    UNREFERENCED_PARAMETER(hInstance);
+}
+
 void CreateBottomControls(HWND parent, HINSTANCE hInstance)
 {
     g_hFontTime = CreateFontW(
@@ -459,6 +471,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             HINSTANCE hInstance = ((LPCREATESTRUCTW)lParam)->hInstance;
             CreateHeaderControls(hwnd, hInstance);
             CreateLanguageBarControls(hwnd, hInstance);
+            CreateLyricsAreaControls(hwnd, hInstance);
             CreateBottomControls(hwnd, hInstance);
             return 0;
         }
@@ -494,6 +507,21 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
             SelectObject(hdc, oldBrush);
             SelectObject(hdc, oldPen);
+
+            // --- Lyrics area placeholder ---
+            // Draw a very subtle outline so the reserved area is visible during development.
+            // This is a 1-pixel dotted outline in a dim color; remove or comment out
+            // once real lyrics controls are added.
+            HPEN hpenOutline = CreatePen(PS_DOT, 1, RGB(0x30, 0x30, 0x45));
+            oldPen = (HPEN)SelectObject(hdc, hpenOutline);
+            oldBrush = (HBRUSH)SelectObject(hdc, (HBRUSH)GetStockObject(NULL_BRUSH));
+            RoundRect(hdc,
+                CARD_LEFT + 2, LYRICS_AREA_TOP,
+                CARD_LEFT + CARD_WIDTH - 2, LYRICS_AREA_TOP + LYRICS_AREA_HEIGHT,
+                CARD_RADIUS, CARD_RADIUS);
+            SelectObject(hdc, oldPen);
+            SelectObject(hdc, oldBrush);
+            DeleteObject(hpenOutline);
 
             // --- Bottom card ---
             // Use the background brush so it blends with the main window
@@ -652,4 +680,3 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     }
     return DefWindowProcW(hwnd, msg, wParam, lParam);
 }
-

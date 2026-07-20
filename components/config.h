@@ -30,6 +30,12 @@
 #define ID_STATIC_MODE_LABEL     120
 #define ID_STATIC_MODE_VALUE     121
 
+// Lyrics area controls (reserved for future use)
+#define ID_LYRICS_CONTAINER      122
+#define ID_LYRICS_LINE_1         123
+#define ID_LYRICS_LINE_2         124
+#define ID_LYRICS_LINE_3         125
+
 // Window size
 extern const int WINDOW_WIDTH;
 extern const int WINDOW_HEIGHT;
@@ -72,6 +78,12 @@ extern const int LANG_BAR_MARGIN;       // horizontal inset from card edges
 extern const int LANG_BAR_ROW1_OFFSET;  // vertical offset of top row from bar top
 extern const int LANG_BAR_ROW2_OFFSET;  // vertical offset of bottom row from bar top
 
+// Lyrics area layout (reserved space between language bar and bottom card)
+extern const int LYRICS_GAP;            // gap above and below the lyrics area
+extern const int LYRICS_AREA_TOP;       // top of the lyrics display area
+extern const int LYRICS_AREA_HEIGHT;    // height of the lyrics display area
+extern const int LYRICS_AREA_BOTTOM;    // bottom of the lyrics display area
+
 // Bottom card layout
 extern const int BOTTOM_CARD_HEIGHT;
 extern const int BOTTOM_CARD_TOP;
@@ -95,6 +107,7 @@ extern const int FONT_SIZE_LABEL;
 extern const int FONT_SIZE_TIME;
 extern const int FONT_SIZE_STATUS;
 extern const int FONT_SIZE_LANG;    // language bar (slightly smaller than artist)
+extern const int FONT_SIZE_LYRICS;  // lyrics text (placeholder for future)
 extern const wchar_t* const FONT_FACE_UI;
 extern const wchar_t* const FONT_FACE_SYMBOL;
 
@@ -124,4 +137,3 @@ extern const wchar_t* const CURRENT_LABEL_TEXT;
 extern const wchar_t* const CURRENT_VALUE_TEXT;
 extern const wchar_t* const MODE_LABEL_TEXT;
 extern const wchar_t* const MODE_VALUE_TEXT;
-
