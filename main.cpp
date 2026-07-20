@@ -1,6 +1,7 @@
 #include "components/common.h"
 #include "components/media_session.h" // To get media session info
 #include "components/lyrics_fetcher.h" // To fetch lyrics using the Python script
+#include "components/gui.h" // To launch the Win32 GUI window
 
 #include <windows.h>
 
@@ -41,6 +42,10 @@ int main() {
         cout << "No media session active." << std::endl;
     }
 
+    cout << "Launching GUI..." << endl;
+    int guiExitCode = RunGui(GetModuleHandle(nullptr), SW_SHOWNORMAL);
+
+    cout << "GUI exit code: " << guiExitCode << endl;
     cout << "**********************************************" << "\n";
     cout << "*                     End                    *" << "\n";
     cout << "**********************************************" << "\n";

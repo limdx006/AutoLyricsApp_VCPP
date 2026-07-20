@@ -4,6 +4,7 @@
 #include "config.h"
 
 
+int RunGui(HINSTANCE hInstance, int nCmdShow);
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 void CreateHeaderControls(HWND parent, HINSTANCE hInstance);
 void CreateLanguageBarControls(HWND parent, HINSTANCE hInstance);

@@ -69,7 +69,7 @@ LRESULT CALLBACK IconHoverSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
     return DefSubclassProc(hwnd, msg, wParam, lParam);
 }
 
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
+int RunGui(HINSTANCE hInstance, int nCmdShow)
 {
     const wchar_t CLASS_NAME[] = L"AutoLyricsWindowClass";
 
