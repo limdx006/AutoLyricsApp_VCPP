@@ -1,6 +1,5 @@
 #include "media_session.h"
 
-// Fetch media session information using Windows Media Control API
 #include <winrt/base.h>
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.Media.Control.h>
@@ -8,23 +7,47 @@
 using namespace winrt;
 using namespace winrt::Windows::Media::Control;
 
-MediaSessionInfo get_media_session_info() {
-    MediaSessionInfo result; // result.success defaults to false
+MediaSessionInfo get_media_session_info()
+{
+    MediaSessionInfo result;
 
-    winrt::init_apartment();
-
-    auto session = GlobalSystemMediaTransportControlsSessionManager::RequestAsync().get().GetCurrentSession();
-
-    if (session)
+    static bool initialized = false;
+    if (!initialized)
     {
-        auto info = session.TryGetMediaPropertiesAsync().get();
-        result.title = to_string(info.Title());
-        result.artist = to_string(info.Artist());
-        result.success = true;
+        winrt::init_apartment();
+        initialized = true;
     }
-    else
-    {
-        cout << "No media session active." << std::endl;
-    }
+
+    auto manager =
+        GlobalSystemMediaTransportControlsSessionManager::RequestAsync().get();
+
+    auto session = manager.GetCurrentSession();
+
+    if (!session)
+        return result;
+
+    auto info = session.TryGetMediaPropertiesAsync().get();
+
+    result.title = to_string(info.Title());
+    result.artist = to_string(info.Artist());
+
+    // Playback information
+    auto playback = session.GetPlaybackInfo();
+
+    result.is_playing =
+        playback.PlaybackStatus() ==
+        GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing;
+
+    // Timeline information
+    auto timeline = session.GetTimelineProperties();
+
+    result.position =
+        timeline.Position().count() / 10000000.0;
+
+    result.duration =
+        timeline.EndTime().count() / 10000000.0;
+
+    result.is_success = true;
+
     return result;
-}   
+}
