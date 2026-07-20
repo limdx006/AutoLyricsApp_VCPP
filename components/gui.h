@@ -1,7 +1,7 @@
 #pragma once
 #include <windows.h>
 #include <commctrl.h>
-#include "components/config.h"
+#include "config.h"
 
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
