@@ -554,15 +554,28 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             SelectObject(hdc, oldBrush);
             SelectObject(hdc, oldPen);
 
-            // --- Progress bar (red, 75% filled) ---
-            // Uses PROGRESS_BAR_H_MARGIN for left/right inset so you can
-            // easily tweak the bar width in config.cpp.
+            // --- Progress bar ---
+            // Uses the current tracked timeline position to fill the bar.
             int barLeft   = CARD_LEFT + PROGRESS_BAR_H_MARGIN;
             int barTop    = BOTTOM_CARD_TOP + PROGRESS_BAR_MARGIN;
             int barRight  = CARD_LEFT + CARD_WIDTH - PROGRESS_BAR_H_MARGIN;
             int barBottom = barTop + PROGRESS_BAR_HEIGHT;
             int barWidth  = barRight - barLeft;
-            int fillWidth = (barWidth * PROGRESS_BAR_FILL_PERCENT) / 100;
+
+            double duration = timeline_tracker::get_duration_seconds();
+            double position = timeline_tracker::get_current_position_seconds();
+            int fillWidth = 0;
+            if (duration > 0.0)
+            {
+                double ratio = position / duration;
+                if (ratio < 0.0) ratio = 0.0;
+                if (ratio > 1.0) ratio = 1.0;
+                fillWidth = static_cast<int>(barWidth * ratio);
+            }
+            else
+            {
+                fillWidth = (barWidth * PROGRESS_BAR_FILL_PERCENT) / 100;
+            }
 
             // Background track (slightly lighter than card bg)
             HBRUSH hbrTrack = CreateSolidBrush(RGB(0x30, 0x30, 0x45));

@@ -39,6 +39,12 @@ namespace timeline_tracker {
             SetWindowTextW(hEndTimeCtrl, END_TIME.c_str());
             RedrawWindow(hEndTimeCtrl, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
         }
+
+        if (g_hwnd)
+        {
+            RedrawWindow(g_hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
+            UpdateWindow(g_hwnd);
+        }
     }
 
     void initialize(HWND hwnd, HINSTANCE hInstance)
@@ -99,6 +105,16 @@ namespace timeline_tracker {
 
         apply_media_state(media);
         updateTimelineDisplay();
+    }
+
+    double get_current_position_seconds()
+    {
+        return g_current_position_seconds;
+    }
+
+    double get_duration_seconds()
+    {
+        return g_duration_seconds;
     }
 
     void updateTimelineDisplay()

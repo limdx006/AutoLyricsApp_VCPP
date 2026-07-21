@@ -12,4 +12,6 @@ namespace timeline_tracker {
     void refresh_from_media();
     void updateTimelineDisplay();
     void handle_timer();
+    double get_current_position_seconds();
+    double get_duration_seconds();
 }
