@@ -6,6 +6,7 @@
 #endif
 
 #include "gui.h"
+#include "timeline_tracker.h"
 
 // Globals
 static HBRUSH g_hbrBackground = nullptr;
@@ -489,6 +490,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             CreateLanguageBarControls(hwnd, hInstance);
             CreateLyricsAreaControls(hwnd, hInstance);
             CreateBottomControls(hwnd, hInstance);
+            timeline_tracker::initialize(hwnd, hInstance);
             return 0;
         }
 
@@ -654,6 +656,15 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             return (LRESULT)g_hbrEditBg;
         }
 
+        case WM_TIMER:
+        {
+            if (wParam == timeline_tracker::TIMER_ID_TIMELINE_UPDATE)
+            {
+                timeline_tracker::handle_timer();
+            }
+            return 0;
+        }
+
         case WM_COMMAND:
         {
             // All buttons/icon labels are wired up but intentionally do
@@ -682,6 +693,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         }
 
         case WM_DESTROY:
+            timeline_tracker::cleanup();
             if (g_hbrBackground)  { DeleteObject(g_hbrBackground);  g_hbrBackground = nullptr; }
             if (g_hbrCard)        { DeleteObject(g_hbrCard);        g_hbrCard = nullptr; }
             if (g_hbrEditBg)      { DeleteObject(g_hbrEditBg);      g_hbrEditBg = nullptr; }

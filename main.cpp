@@ -4,6 +4,7 @@
 #include "components/gui.h" // To launch the Win32 GUI window
 #include "components/time_formatter.h" // To get formatted time from seconds to min and second
 #include "components/auto_nudge.h"
+#include "components/timeline_tracker.h"
 
 #include <windows.h>
 
@@ -23,7 +24,6 @@ int main() {
 
     auto_nudge();
     cout << "Auto nudged" << "\n";
-    
 
     MediaSessionInfo media = get_media_session_info();
 
@@ -32,14 +32,10 @@ int main() {
         cout << "Playing : " << media.is_playing << "\n";
         cout << "Now Playing: " << media.title << " by " << media.artist << "\n";
 
-        string currentTimeText = format_display_time(media.position);
-        string endTimeText = format_display_time(media.duration);
+        cout << "Launching GUI..." << "\n";
+        int guiExitCode = RunGui(GetModuleHandle(nullptr), SW_SHOWNORMAL);
+        cout << "GUI exit code: " << guiExitCode << "\n";
 
-        CURRENT_TIME = wstring(currentTimeText.begin(), currentTimeText.end());
-        END_TIME = wstring(endTimeText.begin(), endTimeText.end());
-
-
-       
         cout << "Fetching lyrics..." << "\n";
         // string response = get_lyrics(media.title, media.artist);
         // json j = json::parse(response);
@@ -50,15 +46,11 @@ int main() {
         // } else {
         //     cout << "No media session active." << std::"\n";
         // }
-
-    cout << "Launching GUI..." << "\n";
-    int guiExitCode = RunGui(GetModuleHandle(nullptr), SW_SHOWNORMAL);
-
-        cout << "GUI exit code: " << guiExitCode << "\n";
-        cout << "**********************************************" << "\n";
-        cout << "*                     End                    *" << "\n";
-        cout << "**********************************************" << "\n";
-        return 0;
     }
+    
+    cout << "**********************************************" << "\n";
+    cout << "*                     End                    *" << "\n";
+    cout << "**********************************************" << "\n";
+    return 0;
 }
 
