@@ -3,6 +3,7 @@
 #include "components/lyrics_fetcher.h" // To fetch lyrics using the Python script
 #include "components/gui.h" // To launch the Win32 GUI window
 #include "components/time_formatter.h" // To get formatted time from seconds to min and second
+#include "components/auto_nudge.h"
 
 #include <windows.h>
 
@@ -20,13 +21,16 @@ int main() {
     cout << "*            AutoLyrics App v1.0             *" << "\n";
     cout << "**********************************************" << "\n";
 
+    auto_nudge();
+    cout << "Auto nudged" << "\n";
+    
 
     MediaSessionInfo media = get_media_session_info();
 
     if (media.is_success)
     {
+        cout << "Playing : " << media.is_playing << "\n";
         cout << "Now Playing: " << media.title << " by " << media.artist << "\n";
-        cout << "Fetching lyrics..." << "\n";
 
         string currentTimeText = format_display_time(media.position);
         string endTimeText = format_display_time(media.duration);
@@ -35,8 +39,8 @@ int main() {
         END_TIME = wstring(endTimeText.begin(), endTimeText.end());
 
 
-        cout << "Playing : " << media.is_playing << "\n";
-
+       
+        cout << "Fetching lyrics..." << "\n";
         // string response = get_lyrics(media.title, media.artist);
         // json j = json::parse(response);
         // if (j["success"]) {

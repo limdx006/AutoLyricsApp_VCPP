@@ -3,7 +3,7 @@
 #include <commctrl.h>
 #include "config.h"
 #include "playback_controls.h"
-
+#include "auto_nudge.h"
 
 int RunGui(HINSTANCE hInstance, int nCmdShow);
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);

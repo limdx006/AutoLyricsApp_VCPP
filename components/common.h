@@ -12,6 +12,7 @@
 using std::string;
 using std::wstring;
 using std::cout;
+using std::wcout;
 using std::cin;
 using std::vector;
 using std::array;

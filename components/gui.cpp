@@ -662,11 +662,14 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             switch (LOWORD(wParam))
             {
                 case ID_BTN_PTT:
-                case ID_BTN_REFRESH:
                 case ID_BTN_SETTINGS:
                 case ID_BTN_OFFSET_MINUS:
                 case ID_BTN_OFFSET_PLUS:
                     // TODO: hook up functionality later
+                    break;
+
+                case ID_BTN_REFRESH:
+                    auto_nudge(0.5);
                     break;
 
                 case ID_BTN_PREV:
