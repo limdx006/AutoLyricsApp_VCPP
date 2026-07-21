@@ -35,6 +35,23 @@ static bool g_hoverNext     = false;
 // false = currently paused (shows play button ▶)
 static bool g_isPlaying = true;
 
+static void UpdatePlayPauseButton(HWND hwnd)
+{
+    HWND hBtn = GetDlgItem(hwnd, ID_BTN_PLAY_PAUSE);
+    if (hBtn)
+    {
+        const wchar_t* newText = g_isPlaying ? L"\u23F8" : L"\u25B6";
+        SetWindowTextW(hBtn, newText);
+    }
+
+    HWND hStatus = GetDlgItem(hwnd, ID_STATIC_STATUS);
+    if (hStatus)
+    {
+        const wchar_t* newStatus = g_isPlaying ? L"Playing" : L"Paused";
+        SetWindowTextW(hStatus, newStatus);
+    }
+}
+
 // Shared subclass procedure for icon labels. dwRefData carries
 // the address of that control's own hover flag, so one function can
 // serve all of them without needing to branch on control ID.
@@ -435,20 +452,29 @@ void CreateBottomControls(HWND parent, HINSTANCE hInstance)
 void TogglePlayPause(HWND hwnd)
 {
     g_isPlaying = !g_isPlaying;
+    UpdatePlayPauseButton(hwnd);
+}
 
-    HWND hBtn = GetDlgItem(hwnd, ID_BTN_PLAY_PAUSE);
-    if (hBtn)
-    {
-        const wchar_t* newText = g_isPlaying ? L"\u23F8" : L"\u25B6";
-        SetWindowTextW(hBtn, newText);
-    }
+void HandlePlaybackAction(HWND hwnd, int controlId)
+{
+    using playback_controls::PlaybackAction;
 
-    // Also update the status text below
-    HWND hStatus = GetDlgItem(hwnd, ID_STATIC_STATUS);
-    if (hStatus)
+    switch (controlId)
     {
-        const wchar_t* newStatus = g_isPlaying ? L"Playing" : L"Paused";
-        SetWindowTextW(hStatus, newStatus);
+    case ID_BTN_PLAY_PAUSE:
+        if (playback_controls::send_action(PlaybackAction::PlayPause))
+        {
+            TogglePlayPause(hwnd);
+        }
+        break;
+
+    case ID_BTN_NEXT:
+        playback_controls::send_action(PlaybackAction::Next);
+        break;
+
+    case ID_BTN_PREV:
+        playback_controls::send_action(PlaybackAction::Previous);
+        break;
     }
 }
 
@@ -640,13 +666,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 case ID_BTN_SETTINGS:
                 case ID_BTN_OFFSET_MINUS:
                 case ID_BTN_OFFSET_PLUS:
-                case ID_BTN_PREV:
-                case ID_BTN_NEXT:
                     // TODO: hook up functionality later
                     break;
 
+                case ID_BTN_PREV:
+                case ID_BTN_NEXT:
                 case ID_BTN_PLAY_PAUSE:
-                    TogglePlayPause(hwnd);
+                    HandlePlaybackAction(hwnd, LOWORD(wParam));
                     break;
             }
             return 0;

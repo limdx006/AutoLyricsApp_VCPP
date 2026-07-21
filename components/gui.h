@@ -2,6 +2,7 @@
 #include <windows.h>
 #include <commctrl.h>
 #include "config.h"
+#include "playback_controls.h"
 
 
 int RunGui(HINSTANCE hInstance, int nCmdShow);

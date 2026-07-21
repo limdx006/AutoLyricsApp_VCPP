@@ -1,12 +1,6 @@
 #include "media_session.h"
 #include "time_formatter.h"
 
-#include <winrt/base.h>
-#include <winrt/Windows.Foundation.h>
-#include <winrt/Windows.Media.Control.h>
-
-using namespace winrt;
-using namespace winrt::Windows::Media::Control;
 
 MediaSessionInfo get_media_session_info()
 {
