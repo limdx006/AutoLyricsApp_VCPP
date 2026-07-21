@@ -1,5 +1,4 @@
 #include "timeline_tracker.h"
-#include "auto_nudge.h"
 #include "media_session.h"
 #include "time_formatter.h"
 #include <algorithm>
@@ -65,12 +64,8 @@ namespace timeline_tracker {
         }
     }
 
-    void refresh_from_media()
+    static bool apply_media_state(const MediaSessionInfo& media)
     {
-        MediaSessionInfo media = get_media_session_info();
-        if (!media.is_success)
-            return;
-
         const double window_position = (std::max)(0.0, static_cast<double>(media.position));
         const double window_duration = (std::max)(0.0, static_cast<double>(media.duration));
 
@@ -82,8 +77,7 @@ namespace timeline_tracker {
                 g_duration_seconds = window_duration;
                 g_is_playing = media.is_playing;
                 g_has_valid_position = true;
-                updateTimelineDisplay();
-                return;
+                return false;
             }
         }
 
@@ -94,7 +88,16 @@ namespace timeline_tracker {
         g_last_window_position_seconds = window_position;
         g_has_window_position = true;
         g_last_update_tick = GetTickCount64();
+        return true;
+    }
 
+    void refresh_from_media()
+    {
+        MediaSessionInfo media = get_media_session_info();
+        if (!media.is_success)
+            return;
+
+        apply_media_state(media);
         updateTimelineDisplay();
     }
 
@@ -130,18 +133,7 @@ namespace timeline_tracker {
         if (!media.is_success)
             return;
 
-        const double window_position = (std::max)(0.0, static_cast<double>(media.position));
-        const double position_delta = std::abs(window_position - g_last_window_position_seconds);
-        if (g_has_window_position && g_last_window_position_seconds >= 0.0 && position_delta < 0.001)
-            return;
-
-        g_current_position_seconds = window_position;
-        g_duration_seconds = (std::max)(0.0, static_cast<double>(media.duration));
-        g_is_playing = media.is_playing;
-        g_has_valid_position = true;
-        g_last_window_position_seconds = window_position;
-        g_has_window_position = true;
-        g_last_update_tick = GetTickCount64();
-        update_controls();
+        if (apply_media_state(media))
+            update_controls();
     }
 }
