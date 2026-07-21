@@ -14,4 +14,6 @@ namespace timeline_tracker {
     void handle_timer();
     double get_current_position_seconds();
     double get_duration_seconds();
+    wstring get_current_title();
+    wstring get_current_artist();
 }

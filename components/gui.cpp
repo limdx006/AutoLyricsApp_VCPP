@@ -186,19 +186,22 @@ void CreateHeaderControls(HWND parent, HINSTANCE hInstance)
     int songY = CARD_TOP + SONG_TOP_OFFSET;
     int songWidth = CARD_WIDTH - (SIDE_RESERVED * 2);
 
+    wstring songTitle = timeline_tracker::get_current_title();
+    wstring artistName = timeline_tracker::get_current_artist();
+
     // Measure how tall the song text actually needs to be once wrapped
     // to songWidth, so a short title takes one line and a long title
     // takes two without overlapping the artist line below it.
     RECT calcRect = { 0, 0, songWidth, 0 };
     HDC hdc = GetDC(parent);
     HFONT oldFont = (HFONT)SelectObject(hdc, g_hFontSong);
-    DrawTextW(hdc, SONG_NAME, -1, &calcRect, DT_CALCRECT | DT_WORDBREAK | DT_CENTER);
+    DrawTextW(hdc, songTitle.c_str(), -1, &calcRect, DT_CALCRECT | DT_WORDBREAK | DT_CENTER);
     SelectObject(hdc, oldFont);
     ReleaseDC(parent, hdc);
     int songHeight = calcRect.bottom - calcRect.top;
 
     HWND hStaticSong = CreateWindowW(
-        L"STATIC", SONG_NAME,
+        L"STATIC", songTitle.c_str(),
         WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOPREFIX,
         songX, songY, songWidth, songHeight,
         parent, (HMENU)ID_STATIC_SONG, hInstance, nullptr);
@@ -208,7 +211,7 @@ void CreateHeaderControls(HWND parent, HINSTANCE hInstance)
     // actually ends, so it never overlaps regardless of song length.
     int artistY = songY + songHeight + ARTIST_GAP;
     HWND hStaticArtist = CreateWindowW(
-        L"STATIC", ARTIST_NAME,
+        L"STATIC", artistName.c_str(),
         WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOPREFIX,
         CARD_LEFT + 20, artistY, CARD_WIDTH - 40, 22,
         parent, (HMENU)ID_STATIC_ARTIST, hInstance, nullptr);
@@ -486,11 +489,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         case WM_CREATE:
         {
             HINSTANCE hInstance = ((LPCREATESTRUCTW)lParam)->hInstance;
+            timeline_tracker::initialize(hwnd, hInstance);
             CreateHeaderControls(hwnd, hInstance);
             CreateLanguageBarControls(hwnd, hInstance);
             CreateLyricsAreaControls(hwnd, hInstance);
             CreateBottomControls(hwnd, hInstance);
-            timeline_tracker::initialize(hwnd, hInstance);
             return 0;
         }
 

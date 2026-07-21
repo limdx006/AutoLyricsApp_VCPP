@@ -14,6 +14,8 @@ namespace timeline_tracker {
     static ULONGLONG g_last_update_tick = 0;
     static double g_last_window_position_seconds = -1.0;
     static bool g_has_window_position = false;
+    static wstring g_current_title;
+    static wstring g_current_artist;
 
     static void update_controls()
     {
@@ -27,6 +29,8 @@ namespace timeline_tracker {
 
         HWND hCurrTimeCtrl = GetDlgItem(g_hwnd, ID_STATIC_CURR_TIME);
         HWND hEndTimeCtrl = GetDlgItem(g_hwnd, ID_STATIC_END_TIME);
+        HWND hSongCtrl = GetDlgItem(g_hwnd, ID_STATIC_SONG);
+        HWND hArtistCtrl = GetDlgItem(g_hwnd, ID_STATIC_ARTIST);
 
         if (hCurrTimeCtrl)
         {
@@ -38,6 +42,18 @@ namespace timeline_tracker {
         {
             SetWindowTextW(hEndTimeCtrl, END_TIME.c_str());
             RedrawWindow(hEndTimeCtrl, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
+        }
+
+        if (hSongCtrl)
+        {
+            SetWindowTextW(hSongCtrl, g_current_title.c_str());
+            RedrawWindow(hSongCtrl, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
+        }
+
+        if (hArtistCtrl)
+        {
+            SetWindowTextW(hArtistCtrl, g_current_artist.c_str());
+            RedrawWindow(hArtistCtrl, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
         }
 
         if (g_hwnd)
@@ -55,6 +71,8 @@ namespace timeline_tracker {
         g_last_update_tick = GetTickCount64();
         g_last_window_position_seconds = -1.0;
         g_has_window_position = false;
+        g_current_title.clear();
+        g_current_artist.clear();
 
         refresh_from_media();
         SetTimer(g_hwnd, TIMER_ID_TIMELINE_UPDATE, TIMELINE_UPDATE_INTERVAL_MS, nullptr);
@@ -94,6 +112,8 @@ namespace timeline_tracker {
         g_last_window_position_seconds = window_position;
         g_has_window_position = true;
         g_last_update_tick = GetTickCount64();
+        g_current_title = media.title.empty() ? wstring(L"Unknown Title") : wstring(media.title.begin(), media.title.end());
+        g_current_artist = media.artist.empty() ? wstring(L"Unknown Artist") : wstring(media.artist.begin(), media.artist.end());
         return true;
     }
 
@@ -115,6 +135,22 @@ namespace timeline_tracker {
     double get_duration_seconds()
     {
         return g_duration_seconds;
+    }
+
+    wstring get_current_title()
+    {
+        if (!g_current_title.empty())
+            return g_current_title;
+
+        return wstring(SONG_NAME ? SONG_NAME : L"Unknown Title");
+    }
+
+    wstring get_current_artist()
+    {
+        if (!g_current_artist.empty())
+            return g_current_artist;
+
+        return wstring(ARTIST_NAME ? ARTIST_NAME : L"Unknown Artist");
     }
 
     void updateTimelineDisplay()
