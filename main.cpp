@@ -2,6 +2,7 @@
 #include "components/media_session.h" // To get media session info
 #include "components/lyrics_fetcher.h" // To fetch lyrics using the Python script
 #include "components/gui.h" // To launch the Win32 GUI window
+#include "components/time_formatter.h" // To get formatted time from seconds to min and second
 
 #include <windows.h>
 
@@ -24,30 +25,35 @@ int main() {
 
     if (media.is_success)
     {
-        cout << "Now Playing: " << media.title << " by " << media.artist << endl;
+        cout << "Now Playing: " << media.title << " by " << media.artist << "\n";
         cout << "Fetching lyrics..." << "\n";
 
-        cout << "Position : " << media.position << endl;
-        cout << "Duration : " << media.duration << endl;
-        
-        cout << "Playing  : " << media.is_playing << endl;
+        cout << "Position: " << media.position << "\n";
+        cout << "Duration: " << media.duration << "\n";
 
-        string response = get_lyrics(media.title, media.artist);
-        json j = json::parse(response);
-        if (j["success"]) {
-            string lyrics = j["lyrics"];
-            cout << "Lyrics:\n" << lyrics << std::endl;
-        }
-    } else {
-        cout << "No media session active." << std::endl;
-    }
+        cout << "Formated position: " << format_display_time(media.position) << "\n";
+        cout << "Formated duration: " << format_display_time(media.duration) << "\n";
 
-    cout << "Launching GUI..." << endl;
+        cout << "Playing : " << media.is_playing << "\n";
+
+        // string response = get_lyrics(media.title, media.artist);
+        // json j = json::parse(response);
+        // if (j["success"]) {
+        //     string lyrics = j["lyrics"];
+        //     cout << "Lyrics:\n" << lyrics << std::"\n";
+        // }
+        // } else {
+        //     cout << "No media session active." << std::"\n";
+        // }
+
+    cout << "Launching GUI..." << "\n";
     int guiExitCode = RunGui(GetModuleHandle(nullptr), SW_SHOWNORMAL);
 
-    cout << "GUI exit code: " << guiExitCode << endl;
-    cout << "**********************************************" << "\n";
-    cout << "*                     End                    *" << "\n";
-    cout << "**********************************************" << "\n";
-    return 0;
+        cout << "GUI exit code: " << guiExitCode << "\n";
+        cout << "**********************************************" << "\n";
+        cout << "*                     End                    *" << "\n";
+        cout << "**********************************************" << "\n";
+        return 0;
+    }
 }
+
