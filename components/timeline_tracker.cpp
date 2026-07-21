@@ -32,35 +32,38 @@ namespace timeline_tracker {
         HWND hSongCtrl = GetDlgItem(g_hwnd, ID_STATIC_SONG);
         HWND hArtistCtrl = GetDlgItem(g_hwnd, ID_STATIC_ARTIST);
 
-        if (hCurrTimeCtrl)
+        // SetWindowTextW already invalidates the control when the text
+        // actually changes, so a manual RedrawWindow isn't needed. Using
+        // RDW_UPDATENOW here previously forced an immediate synchronous
+        // repaint of each control on every 500ms tick (4 extra forced
+        // repaints on top of the full-window one), which added to the
+        // flashing. Skip the SetWindowTextW call entirely when the text
+        // hasn't changed, so most ticks touch nothing at all.
+        auto setIfChanged = [](HWND ctrl, const wstring& newText)
         {
-            SetWindowTextW(hCurrTimeCtrl, CURRENT_TIME.c_str());
-            RedrawWindow(hCurrTimeCtrl, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
-        }
+            if (!ctrl) return;
+            int len = GetWindowTextLengthW(ctrl);
+            wstring current(len, L'\0');
+            if (len > 0)
+                GetWindowTextW(ctrl, &current[0], len + 1);
+            if (current != newText)
+                SetWindowTextW(ctrl, newText.c_str());
+        };
 
-        if (hEndTimeCtrl)
-        {
-            SetWindowTextW(hEndTimeCtrl, END_TIME.c_str());
-            RedrawWindow(hEndTimeCtrl, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
-        }
+        setIfChanged(hCurrTimeCtrl, CURRENT_TIME);
+        setIfChanged(hEndTimeCtrl, END_TIME);
+        setIfChanged(hSongCtrl, g_current_title);
+        setIfChanged(hArtistCtrl, g_current_artist);
 
-        if (hSongCtrl)
-        {
-            SetWindowTextW(hSongCtrl, g_current_title.c_str());
-            RedrawWindow(hSongCtrl, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
-        }
-
-        if (hArtistCtrl)
-        {
-            SetWindowTextW(hArtistCtrl, g_current_artist.c_str());
-            RedrawWindow(hArtistCtrl, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
-        }
-
+        // Invalidate the main window so the progress bar (drawn in WM_PAINT,
+        // based on the tracked position) picks up the new value. Deliberately
+        // no RDW_UPDATENOW/UpdateWindow here: forcing an immediate synchronous
+        // repaint of the whole window on every 500ms tick was causing a visible
+        // erase-then-redraw flash. Letting it go through the normal message
+        // queue (combined with the double-buffered WM_PAINT in gui.cpp) fixes
+        // that while still keeping the bar visually in sync.
         if (g_hwnd)
-        {
-            RedrawWindow(g_hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
-            UpdateWindow(g_hwnd);
-        }
+            InvalidateRect(g_hwnd, nullptr, FALSE);
     }
 
     void initialize(HWND hwnd, HINSTANCE hInstance)

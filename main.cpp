@@ -23,34 +23,30 @@ int main() {
     cout << "**********************************************" << "\n";
 
     auto_nudge();
-    cout << "Auto nudged" << "\n";
 
     MediaSessionInfo media = get_media_session_info();
 
     if (media.is_success)
     {
-        cout << "Playing : " << media.is_playing << "\n";
-        cout << "Now Playing: " << media.title << " by " << media.artist << "\n";
-
         cout << "Launching GUI..." << "\n";
         int guiExitCode = RunGui(GetModuleHandle(nullptr), SW_SHOWNORMAL);
         cout << "GUI exit code: " << guiExitCode << "\n";
 
-        cout << "Fetching lyrics..." << "\n";
-        // string response = get_lyrics(media.title, media.artist);
-        // json j = json::parse(response);
-        // if (j["success"]) {
-        //     string lyrics = j["lyrics"];
-        //     cout << "Lyrics:\n" << lyrics << std::"\n";
-        // }
-        // } else {
-        //     cout << "No media session active." << std::"\n";
-        // }
-    }
+    //     cout << "Fetching lyrics..." << "\n";
+    //     string response = get_lyrics(media.title, media.artist);
+    //     json j = json::parse(response);
+    //     if (j["success"]) {
+    //         string lyrics = j["lyrics"];
+    //         cout << "Lyrics:\n" << lyrics << "\n";
+    //     }
+    // } else {
+    //     cout << "No media session active." << "\n";
+        }
 
     cout << "**********************************************" << "\n";
     cout << "*                     End                    *" << "\n";
     cout << "**********************************************" << "\n";
+
     return 0;
 }
 

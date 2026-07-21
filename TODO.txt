@@ -1,0 +1,7 @@
+- Chinese not display correctly
+- Pin to top feature
+- Window size setting
+- Offset
+- Lyrics display
+- Language detection
+- Translation

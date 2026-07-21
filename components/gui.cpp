@@ -113,7 +113,15 @@ int RunGui(HINSTANCE hInstance, int nCmdShow)
     // borders). AdjustWindowRect expands a desired client-area size so the
     // inside of the window ends up exactly WINDOW_WIDTH x WINDOW_HEIGHT.
     RECT rect = { 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT };
-    DWORD style = WS_OVERLAPPEDWINDOW;
+    // WS_CLIPCHILDREN is the key flag here: without it, every time this
+    // window repaints (e.g. the periodic progress-bar update), the update
+    // region includes the area *underneath* every child control (song text,
+    // artist, time labels, buttons, the offset edit box). WM_PAINT would
+    // paint the header/bottom card graphics straight over those controls,
+    // and Windows would then have to re-expose and redraw each child on top
+    // -- that's the remaining flash. WS_CLIPCHILDREN excludes child-control
+    // regions from the parent's paint/clip area so it never draws over them.
+    DWORD style = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN;
     AdjustWindowRect(&rect, style, FALSE);
 
     HWND hwnd = CreateWindowExW(
@@ -498,10 +506,35 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         }
 
         // Paint the rounded header card near the top of the window.
+        // The window is invalidated periodically (every 500ms, for the
+        // progress bar) as well as by normal OS events (resize, restore,
+        // hover repaints, etc). Painting straight to the screen DC meant
+        // every one of those repaints was preceded by WM_ERASEBKGND wiping
+        // the whole client area to the plain background color, producing a
+        // visible flash before the cards were redrawn on top. Drawing the
+        // whole frame into an off-screen bitmap first and blitting it once
+        // avoids that: the screen only ever shows a complete, already-composed
+        // frame, never the bare background in between.
+        case WM_ERASEBKGND:
+            // No-op: WM_PAINT (below) fills the entire client area itself via
+            // the memory DC, so the default erase would just cause the exact
+            // flicker this fix removes.
+            return 1;
+
         case WM_PAINT:
         {
             PAINTSTRUCT ps;
-            HDC hdc = BeginPaint(hwnd, &ps);
+            HDC screenDc = BeginPaint(hwnd, &ps);
+
+            RECT clientRect;
+            GetClientRect(hwnd, &clientRect);
+
+            HDC hdc = CreateCompatibleDC(screenDc);
+            HBITMAP memBitmap = CreateCompatibleBitmap(screenDc, clientRect.right, clientRect.bottom);
+            HBITMAP oldMemBitmap = (HBITMAP)SelectObject(hdc, memBitmap);
+
+            // Fill the full client area first since WM_ERASEBKGND is now a no-op.
+            FillRect(hdc, &clientRect, g_hbrBackground);
 
             // --- Header card ---
             HBRUSH oldBrush = (HBRUSH)SelectObject(hdc, g_hbrCard);
@@ -594,6 +627,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 RoundRect(hdc, barLeft, barTop, barLeft + fillWidth, barBottom, 3, 3);
             }
             SelectObject(hdc, oldBrush);
+
+            // Blit the fully composed frame to the screen in one go.
+            BitBlt(screenDc, 0, 0, clientRect.right, clientRect.bottom, hdc, 0, 0, SRCCOPY);
+
+            SelectObject(hdc, oldMemBitmap);
+            DeleteObject(memBitmap);
+            DeleteDC(hdc);
 
             EndPaint(hwnd, &ps);
             return 0;
