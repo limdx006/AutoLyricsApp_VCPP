@@ -1,4 +1,5 @@
 #include "media_session.h"
+#include "time_formatter.h"
 
 #include <winrt/base.h>
 #include <winrt/Windows.Foundation.h>

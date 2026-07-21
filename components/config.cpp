@@ -82,8 +82,8 @@ const COLORREF APP_COLOR_PROGRESS_BAR = RGB(0xe0, 0x5a, 0x6e);  // red/pink
 const wchar_t* const SONG_NAME    = L"Song Name Goes Here";
 const wchar_t* const ARTIST_NAME  = L"Unknown Artist";
 const wchar_t* const OFFSET_VALUE = L"0.3";
-const wchar_t* const CURRENT_TIME = L"02:24";
-const wchar_t* const END_TIME     = L"02:51";
+wstring CURRENT_TIME = L"02:24";
+wstring END_TIME     = L"02:51";
 const wchar_t* const STATUS_TEXT  = L"Playing";
 
 // Language bar hardcoded text

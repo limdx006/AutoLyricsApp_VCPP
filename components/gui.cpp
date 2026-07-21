@@ -370,7 +370,7 @@ void CreateBottomControls(HWND parent, HINSTANCE hInstance)
 
     // Current time - left aligned
     HWND hStaticCurrTime = CreateWindowW(
-        L"STATIC", CURRENT_TIME,
+        L"STATIC", CURRENT_TIME.c_str(),
         WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX,
         CARD_LEFT + TIME_TEXT_MARGIN, timeRowY, 60, TIME_TEXT_HEIGHT,
         parent, (HMENU)ID_STATIC_CURR_TIME, hInstance, nullptr);
@@ -378,7 +378,7 @@ void CreateBottomControls(HWND parent, HINSTANCE hInstance)
 
     // End time - right aligned
     HWND hStaticEndTime = CreateWindowW(
-        L"STATIC", END_TIME,
+        L"STATIC", END_TIME.c_str(),
         WS_CHILD | WS_VISIBLE | SS_RIGHT | SS_NOPREFIX,
         CARD_LEFT + CARD_WIDTH - 60 - TIME_TEXT_MARGIN, timeRowY, 60, TIME_TEXT_HEIGHT,
         parent, (HMENU)ID_STATIC_END_TIME, hInstance, nullptr);

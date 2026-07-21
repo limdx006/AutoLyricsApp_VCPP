@@ -1,5 +1,5 @@
 #pragma once
-#include <windows.h>
+#include "common.h"
 
 // Control IDs. These are used in switch/case and as HMENU literals, both
 // of which require compile-time constants, so they stay as #define rather
@@ -126,8 +126,8 @@ extern const COLORREF APP_COLOR_PROGRESS_BAR; // progress bar fill color
 extern const wchar_t* const SONG_NAME;
 extern const wchar_t* const ARTIST_NAME;
 extern const wchar_t* const OFFSET_VALUE;
-extern const wchar_t* const CURRENT_TIME;
-extern const wchar_t* const END_TIME;
+extern std::wstring CURRENT_TIME;
+extern std::wstring END_TIME;
 extern const wchar_t* const STATUS_TEXT;
 
 // Language bar display text

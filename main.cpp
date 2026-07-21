@@ -28,11 +28,12 @@ int main() {
         cout << "Now Playing: " << media.title << " by " << media.artist << "\n";
         cout << "Fetching lyrics..." << "\n";
 
-        cout << "Position: " << media.position << "\n";
-        cout << "Duration: " << media.duration << "\n";
+        string currentTimeText = format_display_time(media.position);
+        string endTimeText = format_display_time(media.duration);
 
-        cout << "Formated position: " << format_display_time(media.position) << "\n";
-        cout << "Formated duration: " << format_display_time(media.duration) << "\n";
+        CURRENT_TIME = wstring(currentTimeText.begin(), currentTimeText.end());
+        END_TIME = wstring(endTimeText.begin(), endTimeText.end());
+
 
         cout << "Playing : " << media.is_playing << "\n";
 
