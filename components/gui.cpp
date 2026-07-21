@@ -6,6 +6,7 @@
 #endif
 
 #include "gui.h"
+#include "timeline_tracker.h"
 
 // Globals
 static HBRUSH g_hbrBackground = nullptr;
@@ -112,7 +113,15 @@ int RunGui(HINSTANCE hInstance, int nCmdShow)
     // borders). AdjustWindowRect expands a desired client-area size so the
     // inside of the window ends up exactly WINDOW_WIDTH x WINDOW_HEIGHT.
     RECT rect = { 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT };
-    DWORD style = WS_OVERLAPPEDWINDOW;
+    // WS_CLIPCHILDREN is the key flag here: without it, every time this
+    // window repaints (e.g. the periodic progress-bar update), the update
+    // region includes the area *underneath* every child control (song text,
+    // artist, time labels, buttons, the offset edit box). WM_PAINT would
+    // paint the header/bottom card graphics straight over those controls,
+    // and Windows would then have to re-expose and redraw each child on top
+    // -- that's the remaining flash. WS_CLIPCHILDREN excludes child-control
+    // regions from the parent's paint/clip area so it never draws over them.
+    DWORD style = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN;
     AdjustWindowRect(&rect, style, FALSE);
 
     HWND hwnd = CreateWindowExW(
@@ -185,19 +194,22 @@ void CreateHeaderControls(HWND parent, HINSTANCE hInstance)
     int songY = CARD_TOP + SONG_TOP_OFFSET;
     int songWidth = CARD_WIDTH - (SIDE_RESERVED * 2);
 
+    wstring songTitle = timeline_tracker::get_current_title();
+    wstring artistName = timeline_tracker::get_current_artist();
+
     // Measure how tall the song text actually needs to be once wrapped
     // to songWidth, so a short title takes one line and a long title
     // takes two without overlapping the artist line below it.
     RECT calcRect = { 0, 0, songWidth, 0 };
     HDC hdc = GetDC(parent);
     HFONT oldFont = (HFONT)SelectObject(hdc, g_hFontSong);
-    DrawTextW(hdc, SONG_NAME, -1, &calcRect, DT_CALCRECT | DT_WORDBREAK | DT_CENTER);
+    DrawTextW(hdc, songTitle.c_str(), -1, &calcRect, DT_CALCRECT | DT_WORDBREAK | DT_CENTER);
     SelectObject(hdc, oldFont);
     ReleaseDC(parent, hdc);
     int songHeight = calcRect.bottom - calcRect.top;
 
     HWND hStaticSong = CreateWindowW(
-        L"STATIC", SONG_NAME,
+        L"STATIC", songTitle.c_str(),
         WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOPREFIX,
         songX, songY, songWidth, songHeight,
         parent, (HMENU)ID_STATIC_SONG, hInstance, nullptr);
@@ -207,7 +219,7 @@ void CreateHeaderControls(HWND parent, HINSTANCE hInstance)
     // actually ends, so it never overlaps regardless of song length.
     int artistY = songY + songHeight + ARTIST_GAP;
     HWND hStaticArtist = CreateWindowW(
-        L"STATIC", ARTIST_NAME,
+        L"STATIC", artistName.c_str(),
         WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOPREFIX,
         CARD_LEFT + 20, artistY, CARD_WIDTH - 40, 22,
         parent, (HMENU)ID_STATIC_ARTIST, hInstance, nullptr);
@@ -485,6 +497,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         case WM_CREATE:
         {
             HINSTANCE hInstance = ((LPCREATESTRUCTW)lParam)->hInstance;
+            timeline_tracker::initialize(hwnd, hInstance);
             CreateHeaderControls(hwnd, hInstance);
             CreateLanguageBarControls(hwnd, hInstance);
             CreateLyricsAreaControls(hwnd, hInstance);
@@ -493,10 +506,35 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         }
 
         // Paint the rounded header card near the top of the window.
+        // The window is invalidated periodically (every 500ms, for the
+        // progress bar) as well as by normal OS events (resize, restore,
+        // hover repaints, etc). Painting straight to the screen DC meant
+        // every one of those repaints was preceded by WM_ERASEBKGND wiping
+        // the whole client area to the plain background color, producing a
+        // visible flash before the cards were redrawn on top. Drawing the
+        // whole frame into an off-screen bitmap first and blitting it once
+        // avoids that: the screen only ever shows a complete, already-composed
+        // frame, never the bare background in between.
+        case WM_ERASEBKGND:
+            // No-op: WM_PAINT (below) fills the entire client area itself via
+            // the memory DC, so the default erase would just cause the exact
+            // flicker this fix removes.
+            return 1;
+
         case WM_PAINT:
         {
             PAINTSTRUCT ps;
-            HDC hdc = BeginPaint(hwnd, &ps);
+            HDC screenDc = BeginPaint(hwnd, &ps);
+
+            RECT clientRect;
+            GetClientRect(hwnd, &clientRect);
+
+            HDC hdc = CreateCompatibleDC(screenDc);
+            HBITMAP memBitmap = CreateCompatibleBitmap(screenDc, clientRect.right, clientRect.bottom);
+            HBITMAP oldMemBitmap = (HBITMAP)SelectObject(hdc, memBitmap);
+
+            // Fill the full client area first since WM_ERASEBKGND is now a no-op.
+            FillRect(hdc, &clientRect, g_hbrBackground);
 
             // --- Header card ---
             HBRUSH oldBrush = (HBRUSH)SelectObject(hdc, g_hbrCard);
@@ -552,15 +590,28 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             SelectObject(hdc, oldBrush);
             SelectObject(hdc, oldPen);
 
-            // --- Progress bar (red, 75% filled) ---
-            // Uses PROGRESS_BAR_H_MARGIN for left/right inset so you can
-            // easily tweak the bar width in config.cpp.
+            // --- Progress bar ---
+            // Uses the current tracked timeline position to fill the bar.
             int barLeft   = CARD_LEFT + PROGRESS_BAR_H_MARGIN;
             int barTop    = BOTTOM_CARD_TOP + PROGRESS_BAR_MARGIN;
             int barRight  = CARD_LEFT + CARD_WIDTH - PROGRESS_BAR_H_MARGIN;
             int barBottom = barTop + PROGRESS_BAR_HEIGHT;
             int barWidth  = barRight - barLeft;
-            int fillWidth = (barWidth * PROGRESS_BAR_FILL_PERCENT) / 100;
+
+            double duration = timeline_tracker::get_duration_seconds();
+            double position = timeline_tracker::get_current_position_seconds();
+            int fillWidth = 0;
+            if (duration > 0.0)
+            {
+                double ratio = position / duration;
+                if (ratio < 0.0) ratio = 0.0;
+                if (ratio > 1.0) ratio = 1.0;
+                fillWidth = static_cast<int>(barWidth * ratio);
+            }
+            else
+            {
+                fillWidth = (barWidth * PROGRESS_BAR_FILL_PERCENT) / 100;
+            }
 
             // Background track (slightly lighter than card bg)
             HBRUSH hbrTrack = CreateSolidBrush(RGB(0x30, 0x30, 0x45));
@@ -576,6 +627,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 RoundRect(hdc, barLeft, barTop, barLeft + fillWidth, barBottom, 3, 3);
             }
             SelectObject(hdc, oldBrush);
+
+            // Blit the fully composed frame to the screen in one go.
+            BitBlt(screenDc, 0, 0, clientRect.right, clientRect.bottom, hdc, 0, 0, SRCCOPY);
+
+            SelectObject(hdc, oldMemBitmap);
+            DeleteObject(memBitmap);
+            DeleteDC(hdc);
 
             EndPaint(hwnd, &ps);
             return 0;
@@ -654,6 +712,15 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             return (LRESULT)g_hbrEditBg;
         }
 
+        case WM_TIMER:
+        {
+            if (wParam == timeline_tracker::TIMER_ID_TIMELINE_UPDATE)
+            {
+                timeline_tracker::handle_timer();
+            }
+            return 0;
+        }
+
         case WM_COMMAND:
         {
             // All buttons/icon labels are wired up but intentionally do
@@ -682,6 +749,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         }
 
         case WM_DESTROY:
+            timeline_tracker::cleanup();
             if (g_hbrBackground)  { DeleteObject(g_hbrBackground);  g_hbrBackground = nullptr; }
             if (g_hbrCard)        { DeleteObject(g_hbrCard);        g_hbrCard = nullptr; }
             if (g_hbrEditBg)      { DeleteObject(g_hbrEditBg);      g_hbrEditBg = nullptr; }

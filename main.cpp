@@ -4,6 +4,7 @@
 #include "components/gui.h" // To launch the Win32 GUI window
 #include "components/time_formatter.h" // To get formatted time from seconds to min and second
 #include "components/auto_nudge.h"
+#include "components/timeline_tracker.h"
 
 #include <windows.h>
 
@@ -22,43 +23,30 @@ int main() {
     cout << "**********************************************" << "\n";
 
     auto_nudge();
-    cout << "Auto nudged" << "\n";
-    
 
     MediaSessionInfo media = get_media_session_info();
 
     if (media.is_success)
     {
-        cout << "Playing : " << media.is_playing << "\n";
-        cout << "Now Playing: " << media.title << " by " << media.artist << "\n";
-
-        string currentTimeText = format_display_time(media.position);
-        string endTimeText = format_display_time(media.duration);
-
-        CURRENT_TIME = wstring(currentTimeText.begin(), currentTimeText.end());
-        END_TIME = wstring(endTimeText.begin(), endTimeText.end());
-
-
-       
-        cout << "Fetching lyrics..." << "\n";
-        // string response = get_lyrics(media.title, media.artist);
-        // json j = json::parse(response);
-        // if (j["success"]) {
-        //     string lyrics = j["lyrics"];
-        //     cout << "Lyrics:\n" << lyrics << std::"\n";
-        // }
-        // } else {
-        //     cout << "No media session active." << std::"\n";
-        // }
-
-    cout << "Launching GUI..." << "\n";
-    int guiExitCode = RunGui(GetModuleHandle(nullptr), SW_SHOWNORMAL);
-
+        cout << "Launching GUI..." << "\n";
+        int guiExitCode = RunGui(GetModuleHandle(nullptr), SW_SHOWNORMAL);
         cout << "GUI exit code: " << guiExitCode << "\n";
-        cout << "**********************************************" << "\n";
-        cout << "*                     End                    *" << "\n";
-        cout << "**********************************************" << "\n";
-        return 0;
-    }
+
+    //     cout << "Fetching lyrics..." << "\n";
+    //     string response = get_lyrics(media.title, media.artist);
+    //     json j = json::parse(response);
+    //     if (j["success"]) {
+    //         string lyrics = j["lyrics"];
+    //         cout << "Lyrics:\n" << lyrics << "\n";
+    //     }
+    // } else {
+    //     cout << "No media session active." << "\n";
+        }
+
+    cout << "**********************************************" << "\n";
+    cout << "*                     End                    *" << "\n";
+    cout << "**********************************************" << "\n";
+
+    return 0;
 }
 
