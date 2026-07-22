@@ -7,6 +7,7 @@
 
 #include "gui.h"
 #include "timeline_tracker.h"
+#include <algorithm>
 
 // Globals
 static HBRUSH g_hbrBackground = nullptr;
@@ -19,6 +20,7 @@ static HFONT  g_hFontIcon      = nullptr;
 static HFONT  g_hFontIconLarge = nullptr;
 static HFONT  g_hFontLabel     = nullptr;
 static bool   g_isPinned       = false;
+static const int MAX_SONG_LINES = 3; // song title wraps up to this many lines, then gets clipped
 static HFONT  g_hFontTime      = nullptr;
 static HFONT  g_hFontStatus    = nullptr;
 static HFONT  g_hFontLang      = nullptr;   // language bar font
@@ -162,9 +164,12 @@ void RefreshHeaderText(HWND parent, const wstring& songTitle)
     HDC hdc = GetDC(parent);
     HFONT oldFont = (HFONT)SelectObject(hdc, g_hFontSong);
     DrawTextW(hdc, songTitle.c_str(), -1, &calcRect, DT_CALCRECT | DT_WORDBREAK | DT_CENTER);
+    TEXTMETRICW tm;
+    GetTextMetricsW(hdc, &tm);
     SelectObject(hdc, oldFont);
     ReleaseDC(parent, hdc);
-    int songHeight = calcRect.bottom - calcRect.top;
+    // Cap to MAX_SONG_LINES so a very long title is clipped after that many lines instead of pushing the artist name further down
+    int songHeight = (std::min)(calcRect.bottom - calcRect.top, tm.tmHeight * MAX_SONG_LINES);
 
     MoveWindow(hStaticSong, songX, songY, songWidth, songHeight, TRUE);
 
@@ -212,9 +217,12 @@ void CreateHeaderControls(HWND parent, HINSTANCE hInstance)
     HDC hdc = GetDC(parent);
     HFONT oldFont = (HFONT)SelectObject(hdc, g_hFontSong);
     DrawTextW(hdc, songTitle.c_str(), -1, &calcRect, DT_CALCRECT | DT_WORDBREAK | DT_CENTER);
+    TEXTMETRICW tm;
+    GetTextMetricsW(hdc, &tm);
     SelectObject(hdc, oldFont);
     ReleaseDC(parent, hdc);
-    int songHeight = calcRect.bottom - calcRect.top;
+    // Cap to MAX_SONG_LINES so a very long title is clipped after that many lines instead of pushing the artist name further down
+    int songHeight = (std::min)(calcRect.bottom - calcRect.top, tm.tmHeight * MAX_SONG_LINES);
 
     HWND hStaticSong = CreateWindowW(
         L"STATIC", songTitle.c_str(),
