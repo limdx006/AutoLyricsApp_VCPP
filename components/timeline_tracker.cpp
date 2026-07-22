@@ -115,8 +115,8 @@ namespace timeline_tracker {
         g_last_window_position_seconds = window_position;
         g_has_window_position = true;
         g_last_update_tick = GetTickCount64();
-        g_current_title = media.title.empty() ? wstring(L"Unknown Title") : wstring(media.title.begin(), media.title.end());
-        g_current_artist = media.artist.empty() ? wstring(L"Unknown Artist") : wstring(media.artist.begin(), media.artist.end());
+        g_current_title = media.title.empty() ? wstring(L"Unknown Title") : utf8_to_wide(media.title);
+        g_current_artist = media.artist.empty() ? wstring(L"Unknown Artist") : utf8_to_wide(media.artist);
         return true;
     }
 
