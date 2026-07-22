@@ -23,18 +23,16 @@ static HFONT  g_hFontTime      = nullptr;
 static HFONT  g_hFontStatus    = nullptr;
 static HFONT  g_hFontLang      = nullptr;   // language bar font
 
-// Hover state for icon labels.
-// Header section
+// Hover state for header icon labels
 static bool g_hoverPTT      = false;
 static bool g_hoverRefresh  = false;
 static bool g_hoverSettings = false;
-// Bottom section (playback controls)
+// Hover state for playback control icons
 static bool g_hoverPrev     = false;
 static bool g_hoverPlayPause = false;
 static bool g_hoverNext     = false;
 
-// Play/Pause toggle state. true = currently playing (shows pause button ⏸)
-// false = currently paused (shows play button ▶)
+// true = playing (shows pause button), false = paused (shows play button)
 static bool g_isPlaying = true;
 
 static void UpdatePlayPauseButton(HWND hwnd)
@@ -54,9 +52,7 @@ static void UpdatePlayPauseButton(HWND hwnd)
     }
 }
 
-// Shared subclass procedure for icon labels. dwRefData carries
-// the address of that control's own hover flag, so one function can
-// serve all of them without needing to branch on control ID.
+// Shared subclass procedure for icon labels; dwRefData is that control's hover flag
 LRESULT CALLBACK IconHoverSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam,
                                         UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
 {
@@ -110,20 +106,9 @@ int RunGui(HINSTANCE hInstance, int nCmdShow)
     if (!RegisterClassExW(&wc))
         return 0;
 
-    // CreateWindowExW includes window frame; AdjustWindowRect sets client size.
+    // AdjustWindowRect expands the desired client size to account for the window frame
     RECT rect = { 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT };
-    // WS_CLIPCHILDREN is the key flag here: without it, every time this
-    // window repaints (e.g. the periodic progress-bar update), the update
-    // region includes the area *underneath* every child control (song text,
-    // artist, time labels, buttons, the offset edit box). WM_PAINT would
-    // paint the header/bottom card graphics straight over those controls,
-    // and Windows would then have to re-expose and redraw each child on top
-    // -- that's the remaining flash. WS_CLIPCHILDREN excludes child-control
-    // regions from the parent's paint/clip area so it never draws over them.
-    // Fixed-size window: WS_OVERLAPPEDWINDOW includes WS_THICKFRAME (the
-    // draggable resize border) and WS_MAXIMIZEBOX (maximize also resizes),
-    // so both are left out here. Keeps the title bar, system menu, close,
-    // and minimize -- just not resizing.
+    // WS_CLIPCHILDREN stops the parent painting over child controls; no WS_THICKFRAME/WS_MAXIMIZEBOX keeps the window a fixed size
     DWORD style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_CLIPCHILDREN;
     AdjustWindowRect(&rect, style, FALSE);
 
@@ -144,9 +129,7 @@ int RunGui(HINSTANCE hInstance, int nCmdShow)
     if (!hwnd)
         return 0;
 
-    // Explicitly (re)set the title after creation. On some Windows 11
-    // builds, the DWM-composited title bar doesn't reliably pick up the
-    // full lpWindowName string passed to CreateWindowExW at creation time.
+    // Re-set the title; some Windows 11 builds don't pick it up from CreateWindowExW alone
     SetWindowTextW(hwnd, L"AutoLyrics");
 
     ShowWindow(hwnd, nCmdShow);
@@ -163,10 +146,7 @@ int RunGui(HINSTANCE hInstance, int nCmdShow)
     return 0;
 }
 
-// Re-measures the song text at its current width and resizes/repositions
-// the song + artist boxes to match. CreateHeaderControls does this once at
-// startup; call this again whenever the track changes so a new song's
-// wrapping is recalculated instead of reusing the previous song's box size.
+// Re-measures the song text and resizes/repositions the song + artist boxes to fit
 void RefreshHeaderText(HWND parent, const wstring& songTitle)
 {
     HWND hStaticSong = GetDlgItem(parent, ID_STATIC_SONG);
@@ -219,9 +199,7 @@ void CreateHeaderControls(HWND parent, HINSTANCE hInstance)
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
         CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, FONT_FACE_UI);
 
-    // Song name area is inset by SIDE_RESERVED on both sides: the right
-    // inset leaves room for the PTT icon, the left inset is left blank
-    // to match, so the text block stays visually centered on the card.
+    // Inset by SIDE_RESERVED on both sides so the PTT icon has room and the text stays centered
     int songX = CARD_LEFT + SIDE_RESERVED;
     int songY = CARD_TOP + SONG_TOP_OFFSET;
     int songWidth = CARD_WIDTH - (SIDE_RESERVED * 2);
@@ -229,9 +207,7 @@ void CreateHeaderControls(HWND parent, HINSTANCE hInstance)
     wstring songTitle = timeline_tracker::get_current_title();
     wstring artistName = timeline_tracker::get_current_artist();
 
-    // Measure how tall the song text actually needs to be once wrapped
-    // to songWidth, so a short title takes one line and a long title
-    // takes two without overlapping the artist line below it.
+    // Measure the wrapped song text height so short/long titles both fit without overlapping the artist line
     RECT calcRect = { 0, 0, songWidth, 0 };
     HDC hdc = GetDC(parent);
     HFONT oldFont = (HFONT)SelectObject(hdc, g_hFontSong);
@@ -247,8 +223,7 @@ void CreateHeaderControls(HWND parent, HINSTANCE hInstance)
         parent, (HMENU)ID_STATIC_SONG, hInstance, nullptr);
     SendMessageW(hStaticSong, WM_SETFONT, (WPARAM)g_hFontSong, TRUE);
 
-    // Artist name starts right where the (possibly wrapped) song text
-    // actually ends, so it never overlaps regardless of song length.
+    // Artist name starts right where the wrapped song text ends
     int artistY = songY + songHeight + ARTIST_GAP;
     HWND hStaticArtist = CreateWindowW(
         L"STATIC", artistName.c_str(),
@@ -257,9 +232,7 @@ void CreateHeaderControls(HWND parent, HINSTANCE hInstance)
         parent, (HMENU)ID_STATIC_ARTIST, hInstance, nullptr);
     SendMessageW(hStaticArtist, WM_SETFONT, (WPARAM)g_hFontArtist, TRUE);
 
-    // Pin-To-Top: created after the song/artist controls so it's on top
-    // in z-order, and its box sits entirely inside the space reserved by
-    // SIDE_RESERVED so the song text can never paint over it.
+    // Pin-to-top star, sits in the space reserved by SIDE_RESERVED
     HWND hBtnPTT = CreateWindowW(
         L"STATIC", L"\u2606",
         WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY | SS_NOPREFIX,
@@ -268,10 +241,7 @@ void CreateHeaderControls(HWND parent, HINSTANCE hInstance)
     SendMessageW(hBtnPTT, WM_SETFONT, (WPARAM)g_hFontIcon, TRUE);
     SetWindowSubclass(hBtnPTT, IconHoverSubclassProc, 1, (DWORD_PTR)&g_hoverPTT);
 
-    // Footer row: REF | Offset: - 0.3 + | ST
-    // Every control in this row is a different size, so instead of giving
-    // them all the same y, we pick one horizontal center line for the row
-    // and place each control so its own vertical center sits on that line.
+    // Footer row (REF | Offset | ST): each control centers on this shared row line
     int rowCenterY = CARD_TOP + CARD_HEIGHT - FOOTER_ROW_OFFSET_FROM_BOTTOM;
     int refY = rowCenterY - FOOTER_ICON_SIZE / 2;
 
@@ -291,8 +261,7 @@ void CreateHeaderControls(HWND parent, HINSTANCE hInstance)
     SendMessageW(hBtnSettings, WM_SETFONT, (WPARAM)g_hFontIconLarge, TRUE);
     SetWindowSubclass(hBtnSettings, IconHoverSubclassProc, 3, (DWORD_PTR)&g_hoverSettings);
 
-    // Offset cluster, centered within the card. Buttons stay as real
-    // BUTTON controls so the visible border stays, matching the reference.
+    // Offset cluster, centered within the card
     int clusterWidth = OFFSET_LABEL_WIDTH + OFFSET_GAP_LABEL_TO_MINUS
                       + OFFSET_BTN_SIZE + OFFSET_GAP_MINUS_TO_EDIT
                       + OFFSET_EDIT_WIDTH + OFFSET_GAP_EDIT_TO_PLUS
@@ -339,10 +308,7 @@ void CreateLanguageBarControls(HWND parent, HINSTANCE hInstance)
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
         CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, FONT_FACE_UI);
 
-    // The language bar is divided into 3 columns, each centered within its third.
-    // Column 1 (left):  Language: / Chinese
-    // Column 2 (center): Current: / PinYin
-    // Column 3 (right):  Original / Translated
+    // 3 equal columns, each centered: Language | Current | Mode
     int colWidth = CARD_WIDTH / 3;
 
     int row1Y = LANG_BAR_TOP + LANG_BAR_ROW1_OFFSET;
@@ -365,7 +331,7 @@ void CreateLanguageBarControls(HWND parent, HINSTANCE hInstance)
         parent, (HMENU)ID_STATIC_LANG_VALUE, hInstance, nullptr);
     SendMessageW(hLangValue, WM_SETFONT, (WPARAM)g_hFontLang, TRUE);
 
-    // --- Column 2: Current (centered in the window) ---
+    // --- Column 2: Current ---
     int col2X = CARD_LEFT + colWidth;
     HWND hCurrentLabel = CreateWindowW(
         L"STATIC", CURRENT_LABEL_TEXT,
@@ -400,11 +366,7 @@ void CreateLanguageBarControls(HWND parent, HINSTANCE hInstance)
 
 void CreateLyricsAreaControls(HWND parent, HINSTANCE hInstance)
 {
-    // Reserved space for lyrics display between the language bar and bottom card.
-    // No controls are created yet -- this function is a placeholder for future
-    // lyrics rendering (e.g. custom-drawn lines, scrollable text, etc.).
-    // The area bounds are defined by LYRICS_AREA_TOP and LYRICS_AREA_HEIGHT
-    // in config.cpp so the layout is already locked in.
+    // Placeholder: lyrics area bounds are set (LYRICS_AREA_TOP/HEIGHT), no controls yet
     UNREFERENCED_PARAMETER(parent);
     UNREFERENCED_PARAMETER(hInstance);
 }
@@ -421,8 +383,7 @@ void CreateBottomControls(HWND parent, HINSTANCE hInstance)
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
         CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, FONT_FACE_UI);
 
-    // Bottom card: same background as main window (not the header card color)
-    // so it visually blends with the lyrics area above it.
+    // Bottom card uses the main window background so it blends with the lyrics area above
     int cardBottom = BOTTOM_CARD_TOP + BOTTOM_CARD_HEIGHT;
 
     // Time row: Current time (left), playback controls (center), End time (right)
@@ -445,8 +406,7 @@ void CreateBottomControls(HWND parent, HINSTANCE hInstance)
         parent, (HMENU)ID_STATIC_END_TIME, hInstance, nullptr);
     SendMessageW(hStaticEndTime, WM_SETFONT, (WPARAM)g_hFontTime, TRUE);
 
-    // Playback controls: Previous, Play/Pause, Next - centered
-    // Total width = 3 icons + 2 gaps
+    // Previous / Play-Pause / Next, centered as a group (3 icons + 2 gaps)
     int controlsTotalWidth = (PLAY_ICON_SIZE * 3) + (PLAY_ICON_GAP * 2);
     int controlsX = CARD_LEFT + (CARD_WIDTH - controlsTotalWidth) / 2;
     int controlsY = timeRowCenterY - PLAY_ICON_SIZE / 2;
@@ -461,8 +421,7 @@ void CreateBottomControls(HWND parent, HINSTANCE hInstance)
     SetWindowSubclass(hBtnPrev, IconHoverSubclassProc, 4, (DWORD_PTR)&g_hoverPrev);
     controlsX += PLAY_ICON_SIZE + PLAY_ICON_GAP;
 
-    // Play/Pause: starts as pause (\u23F8) since g_isPlaying defaults to true.
-    // The text is updated dynamically via TogglePlayPause().
+    // Starts as pause icon since g_isPlaying defaults to true; updated via TogglePlayPause()
     HWND hBtnPlayPause = CreateWindowW(
         L"STATIC", L"\u23F8",
         WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY | SS_NOPREFIX,
@@ -491,8 +450,7 @@ void CreateBottomControls(HWND parent, HINSTANCE hInstance)
     SendMessageW(hStaticStatus, WM_SETFONT, (WPARAM)g_hFontStatus, TRUE);
 }
 
-// Toggle the play/pause button text and the playing state.
-// When playing -> show pause symbol (\u23F8), when paused -> show play triangle (\u25B6).
+// Toggles playing state and updates the play/pause button icon accordingly
 void TogglePlayPause(HWND hwnd)
 {
     g_isPlaying = !g_isPlaying;
@@ -537,20 +495,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             return 0;
         }
 
-        // Paint the rounded header card near the top of the window.
-        // The window is invalidated periodically (every 500ms, for the
-        // progress bar) as well as by normal OS events (resize, restore,
-        // hover repaints, etc). Painting straight to the screen DC meant
-        // every one of those repaints was preceded by WM_ERASEBKGND wiping
-        // the whole client area to the plain background color, producing a
-        // visible flash before the cards were redrawn on top. Drawing the
-        // whole frame into an off-screen bitmap first and blitting it once
-        // avoids that: the screen only ever shows a complete, already-composed
-        // frame, never the bare background in between.
+        // No-op: WM_PAINT below fills the whole client area itself (double-buffered), so skip the default erase to avoid flicker
         case WM_ERASEBKGND:
-            // No-op: WM_PAINT (below) fills the entire client area itself via
-            // the memory DC, so the default erase would just cause the exact
-            // flicker this fix removes.
             return 1;
 
         case WM_PAINT:
@@ -565,7 +511,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             HBITMAP memBitmap = CreateCompatibleBitmap(screenDc, clientRect.right, clientRect.bottom);
             HBITMAP oldMemBitmap = (HBITMAP)SelectObject(hdc, memBitmap);
 
-            // Fill the full client area first since WM_ERASEBKGND is now a no-op.
+            // Fill the client area since WM_ERASEBKGND is now a no-op
             FillRect(hdc, &clientRect, g_hbrBackground);
 
             // --- Header card ---
@@ -581,8 +527,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             SelectObject(hdc, oldBrush);
             SelectObject(hdc, oldPen);
 
-            // --- Language bar ---
-            // Same background as header card, with rounded corners
+            // --- Language bar (same style as header card) ---
             oldBrush = (HBRUSH)SelectObject(hdc, g_hbrCard);
             oldPen   = (HPEN)SelectObject(hdc, nullPen);
 
@@ -594,10 +539,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             SelectObject(hdc, oldBrush);
             SelectObject(hdc, oldPen);
 
-            // --- Lyrics area placeholder ---
-            // Draw a very subtle outline so the reserved area is visible during development.
-            // This is a 1-pixel dotted outline in a dim color; remove or comment out
-            // once real lyrics controls are added.
+            // --- Lyrics area placeholder: dim dotted outline, remove once real controls are added ---
             HPEN hpenOutline = CreatePen(PS_DOT, 1, RGB(0x30, 0x30, 0x45));
             oldPen = (HPEN)SelectObject(hdc, hpenOutline);
             oldBrush = (HBRUSH)SelectObject(hdc, (HBRUSH)GetStockObject(NULL_BRUSH));
@@ -609,8 +551,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             SelectObject(hdc, oldBrush);
             DeleteObject(hpenOutline);
 
-            // --- Bottom card ---
-            // Use the background brush so it blends with the main window
+            // --- Bottom card (blends with main window background) ---
             oldBrush = (HBRUSH)SelectObject(hdc, g_hbrBackground);
             oldPen   = (HPEN)SelectObject(hdc, nullPen);
 
@@ -622,8 +563,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             SelectObject(hdc, oldBrush);
             SelectObject(hdc, oldPen);
 
-            // --- Progress bar ---
-            // Uses the current tracked timeline position to fill the bar.
+            // --- Progress bar, filled based on the tracked timeline position ---
             int barLeft   = CARD_LEFT + PROGRESS_BAR_H_MARGIN;
             int barTop    = BOTTOM_CARD_TOP + PROGRESS_BAR_MARGIN;
             int barRight  = CARD_LEFT + CARD_WIDTH - PROGRESS_BAR_H_MARGIN;
@@ -671,9 +611,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             return 0;
         }
 
-        // STATIC control text/background differs per control: song name
-        // gets the accent color, icon labels and artist get lighter tones,
-        // all sit on the card so the background is always the card brush.
+        // Per-control text color/background for STATIC controls
         case WM_CTLCOLORSTATIC:
         {
             HDC hdcStatic = (HDC)wParam;
@@ -734,8 +672,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             return (LRESULT)g_hbrCard;
         }
 
-        // EDIT control (the offset value box): white background,
-        // dark text, matching the reference screenshot's white pill.
+        // Offset value box: white background, dark text
         case WM_CTLCOLOREDIT:
         {
             HDC hdcEdit = (HDC)wParam;
@@ -755,9 +692,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
         case WM_COMMAND:
         {
-            // All buttons/icon labels are wired up but intentionally do
-            // nothing yet. STN_CLICKED and BN_CLICKED are both notification
-            // code 0, so this single switch catches clicks from either.
+            // STN_CLICKED and BN_CLICKED are both 0, so this catches clicks from either
             switch (LOWORD(wParam))
             {
                 case ID_BTN_PTT:
