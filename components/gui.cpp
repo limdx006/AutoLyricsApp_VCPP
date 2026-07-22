@@ -160,6 +160,32 @@ int RunGui(HINSTANCE hInstance, int nCmdShow)
     return 0;
 }
 
+// Re-measures the song text at its current width and resizes/repositions the song + artist boxes to match. 
+void RefreshHeaderText(HWND parent, const wstring& songTitle)
+{
+    HWND hStaticSong = GetDlgItem(parent, ID_STATIC_SONG);
+    HWND hStaticArtist = GetDlgItem(parent, ID_STATIC_ARTIST);
+    if (!hStaticSong || !hStaticArtist)
+        return;
+
+    int songX = CARD_LEFT + SIDE_RESERVED;
+    int songY = CARD_TOP + SONG_TOP_OFFSET;
+    int songWidth = CARD_WIDTH - (SIDE_RESERVED * 2);
+
+    RECT calcRect = { 0, 0, songWidth, 0 };
+    HDC hdc = GetDC(parent);
+    HFONT oldFont = (HFONT)SelectObject(hdc, g_hFontSong);
+    DrawTextW(hdc, songTitle.c_str(), -1, &calcRect, DT_CALCRECT | DT_WORDBREAK | DT_CENTER);
+    SelectObject(hdc, oldFont);
+    ReleaseDC(parent, hdc);
+    int songHeight = calcRect.bottom - calcRect.top;
+
+    MoveWindow(hStaticSong, songX, songY, songWidth, songHeight, TRUE);
+
+    int artistY = songY + songHeight + ARTIST_GAP;
+    MoveWindow(hStaticArtist, CARD_LEFT + 20, artistY, CARD_WIDTH - 40, 22, TRUE);
+}
+
 void CreateHeaderControls(HWND parent, HINSTANCE hInstance)
 {
     g_hFontSong = CreateFontW(

@@ -1,6 +1,7 @@
 #include "timeline_tracker.h"
 #include "media_session.h"
 #include "time_formatter.h"
+#include "gui.h"
 #include <algorithm>
 #include <chrono>
 
@@ -39,21 +40,30 @@ namespace timeline_tracker {
         // repaints on top of the full-window one), which added to the
         // flashing. Skip the SetWindowTextW call entirely when the text
         // hasn't changed, so most ticks touch nothing at all.
-        auto setIfChanged = [](HWND ctrl, const wstring& newText)
+        auto setIfChanged = [](HWND ctrl, const wstring& newText) -> bool
         {
-            if (!ctrl) return;
+            if (!ctrl) return false;
             int len = GetWindowTextLengthW(ctrl);
             wstring current(len, L'\0');
             if (len > 0)
                 GetWindowTextW(ctrl, &current[0], len + 1);
             if (current != newText)
+            {
                 SetWindowTextW(ctrl, newText.c_str());
+                return true;
+            }
+            return false;
         };
 
         setIfChanged(hCurrTimeCtrl, CURRENT_TIME);
         setIfChanged(hEndTimeCtrl, END_TIME);
-        setIfChanged(hSongCtrl, g_current_title);
+        bool titleChanged = setIfChanged(hSongCtrl, g_current_title);
         setIfChanged(hArtistCtrl, g_current_artist);
+
+        // New song -> re-measure and resize the header box for it, instead
+        // of leaving it sized for whatever the previous song needed.
+        if (titleChanged)
+            RefreshHeaderText(g_hwnd, g_current_title);
 
         // Invalidate the main window so the progress bar (drawn in WM_PAINT,
         // based on the tracked position) picks up the new value. Deliberately
