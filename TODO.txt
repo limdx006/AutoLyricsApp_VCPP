@@ -1,7 +1,5 @@
-- Chinese not display correctly
-- Pin to top feature
-- Window size setting
-- Offset
 - Lyrics display
+- Offset
 - Language detection
 - Translation
+- Setting (Window and text size)
