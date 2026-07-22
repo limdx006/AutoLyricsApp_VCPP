@@ -18,6 +18,7 @@ static HFONT  g_hFontArtist    = nullptr;
 static HFONT  g_hFontIcon      = nullptr;
 static HFONT  g_hFontIconLarge = nullptr;
 static HFONT  g_hFontLabel     = nullptr;
+static bool   g_isPinned       = false;
 static HFONT  g_hFontTime      = nullptr;
 static HFONT  g_hFontStatus    = nullptr;
 static HFONT  g_hFontLang      = nullptr;   // language bar font
@@ -109,9 +110,7 @@ int RunGui(HINSTANCE hInstance, int nCmdShow)
     if (!RegisterClassExW(&wc))
         return 0;
 
-    // CreateWindowExW's width/height include the window frame (title bar,
-    // borders). AdjustWindowRect expands a desired client-area size so the
-    // inside of the window ends up exactly WINDOW_WIDTH x WINDOW_HEIGHT.
+    // CreateWindowExW includes window frame; AdjustWindowRect sets client size.
     RECT rect = { 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT };
     // WS_CLIPCHILDREN is the key flag here: without it, every time this
     // window repaints (e.g. the periodic progress-bar update), the update
@@ -121,7 +120,11 @@ int RunGui(HINSTANCE hInstance, int nCmdShow)
     // and Windows would then have to re-expose and redraw each child on top
     // -- that's the remaining flash. WS_CLIPCHILDREN excludes child-control
     // regions from the parent's paint/clip area so it never draws over them.
-    DWORD style = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN;
+    // Fixed-size window: WS_OVERLAPPEDWINDOW includes WS_THICKFRAME (the
+    // draggable resize border) and WS_MAXIMIZEBOX (maximize also resizes),
+    // so both are left out here. Keeps the title bar, system menu, close,
+    // and minimize -- just not resizing.
+    DWORD style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_CLIPCHILDREN;
     AdjustWindowRect(&rect, style, FALSE);
 
     HWND hwnd = CreateWindowExW(
@@ -160,7 +163,10 @@ int RunGui(HINSTANCE hInstance, int nCmdShow)
     return 0;
 }
 
-// Re-measures the song text at its current width and resizes/repositions the song + artist boxes to match. 
+// Re-measures the song text at its current width and resizes/repositions
+// the song + artist boxes to match. CreateHeaderControls does this once at
+// startup; call this again whenever the track changes so a new song's
+// wrapping is recalculated instead of reusing the previous song's box size.
 void RefreshHeaderText(HWND parent, const wstring& songTitle)
 {
     HWND hStaticSong = GetDlgItem(parent, ID_STATIC_SONG);
@@ -755,6 +761,17 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             switch (LOWORD(wParam))
             {
                 case ID_BTN_PTT:
+                {
+                    g_isPinned = !g_isPinned;
+                    SetWindowPos(hwnd, g_isPinned ? HWND_TOPMOST : HWND_NOTOPMOST,
+                        0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+
+                    HWND hBtnPTT = GetDlgItem(hwnd, ID_BTN_PTT);
+                    if (hBtnPTT)
+                        SetWindowTextW(hBtnPTT, g_isPinned ? L"\u2605" : L"\u2606"); // filled vs outline star
+                    break;
+                }
+
                 case ID_BTN_SETTINGS:
                 case ID_BTN_OFFSET_MINUS:
                 case ID_BTN_OFFSET_PLUS:
