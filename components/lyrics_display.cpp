@@ -135,6 +135,41 @@ namespace lyrics_display {
         if (g_lines.empty() || g_currentIndex < 0)
             return;
 
+        // Measure line height using both fonts to get the maximum height needed
+        int fontHeight = 0;
+        {
+            HFONT hOld = (HFONT)SelectObject(hdc, g_hFontNormal);
+            TEXTMETRICW tm;
+            GetTextMetricsW(hdc, &tm);
+            fontHeight = tm.tmHeight + tm.tmExternalLeading;
+            SelectObject(hdc, hOld);
+        }
+        {
+            HFONT hOld = (HFONT)SelectObject(hdc, g_hFontCurrent);
+            TEXTMETRICW tm;
+            GetTextMetricsW(hdc, &tm);
+            int h = tm.tmHeight + tm.tmExternalLeading;
+            if (h > fontHeight)
+                fontHeight = h;
+            SelectObject(hdc, hOld);
+        }
+        if (fontHeight <= 0)
+            fontHeight = 1; // avoid division by zero
+
+        // Slot height (distance between centers of consecutive lines, includes gap)
+        // Make it large enough to allow a line to wrap to two lines.
+        const int slotHeight = static_cast<int>(fontHeight * 2.2f); // ~2.2 lines height
+
+        int areaHeight = area.bottom - area.top;
+        // Maximum number of lines that can fit vertically (using slotHeight)
+        int maxLines = areaHeight / slotHeight;
+        if (maxLines < 1)
+            maxLines = 1;
+
+        // Lines to show above and below the current line (to center current line as much as possible)
+        int linesAbove = (maxLines - 1) / 2;
+        int linesBelow = maxLines - 1 - linesAbove;
+
         // 0 = just started sliding, 1 = settled on the new current line. Ease-out cubic for a smooth finish.
         double t = 1.0;
         if (g_animating)
@@ -144,38 +179,45 @@ namespace lyrics_display {
         }
 
         int centerY = (area.top + area.bottom) / 2;
-        int areaHeight = area.bottom - area.top;
-        // Calculate line spacing so that 5 lines (current +/-2) fill the height of the area.
-        float lineSpacing = static_cast<float>(areaHeight) / 5.0f;
 
         HRGN oldClip = CreateRectRgn(0, 0, 0, 0);
         int hadClip = GetClipRgn(hdc, oldClip);
         IntersectClipRect(hdc, area.left, area.top, area.right, area.bottom);
         int oldBkMode = SetBkMode(hdc, TRANSPARENT);
 
-        for (int i = g_currentIndex - 2; i <= g_currentIndex + 2; ++i)
-        {
-            if (i < 0 || i >= (int)g_lines.size())
-                continue;
+        // Determine a safe range of indices to consider (we'll cull by offset later)
+        int minIndex = g_currentIndex - maxLines - 2;
+        int maxIndex = g_currentIndex + maxLines + 2;
+        if (minIndex < 0) minIndex = 0;
+        if (maxIndex >= (int)g_lines.size()) maxIndex = (int)g_lines.size() - 1;
 
-            // finalOffset: -1 = one slot above center, 0 = center, +1 = one slot below.
-            // Mid-animation it's offset by (1 - t) extra slots, so the whole
-            // stack visibly slides up by one slot as t goes 0 -> 1.
-            double newOffset = i - g_currentIndex;
-            double finalOffset = g_animating ? (newOffset + (1.0 - t)) : newOffset;
-            if (finalOffset < -2.5 || finalOffset > 2.5)
+        for (int i = minIndex; i <= maxIndex; ++i)
+        {
+            // Compute offset in lines (slots) from current index
+            double lineOffset = i - g_currentIndex;
+            double finalOffset = lineOffset;
+            if (g_animating)
+            {
+                // When animating, shift the entire stack by (1-t) slots in the direction opposite to the change
+                // (so that lines slide up when advancing to a higher index)
+                finalOffset += (1.0 - t);
+            }
+
+            // Check if this line is within the visible range (with a little extra for animation)
+            if (finalOffset < -(linesAbove + 1.0) || finalOffset > (linesBelow + 1.0))
                 continue;
 
             double closeness = (std::max)(0.0, 1.0 - std::abs(finalOffset)); // 1 at center, 0 a slot away
             HFONT font = (closeness > 0.5) ? g_hFontCurrent : g_hFontNormal;
             COLORREF color = lerp_color(APP_COLOR_ARTIST_TEXT, APP_COLOR_LIGHT_TEXT, closeness);
 
-            int y = centerY + (int)std::lround(finalOffset * lineSpacing);
-            const int horizontalMargin = 10; // pixels of padding left/right
+            int y = centerY + static_cast<int>(std::lround(finalOffset * slotHeight));
+            const int horizontalMargin = 20; // pixels of padding left/right
+            // Use slotHeight as the rectangle height to allow wrapping (up to ~2 lines)
             RECT lineRect = { area.left + horizontalMargin, 
-                              static_cast<LONG>(y - lineSpacing / 2.0f), 
+                              y - slotHeight / 2, 
                               area.right - horizontalMargin, 
-                              static_cast<LONG>(y + lineSpacing / 2.0f) };
+                              y + slotHeight / 2 };
 
             HFONT oldFont = (HFONT)SelectObject(hdc, font);
             SetTextColor(hdc, color);
