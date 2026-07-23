@@ -7,7 +7,14 @@
 
 #include "gui.h"
 #include "timeline_tracker.h"
+#include "lyrics_display.h"
 #include <algorithm>
+#include <atomic>
+#include <utility>
+
+// Set once the main window exists; lets a background thread (the lyrics
+// fetch) safely hand results to the GUI thread via PostMessage.
+static std::atomic<HWND> g_mainHwnd{ nullptr };
 
 // Globals
 static HBRUSH g_hbrBackground = nullptr;
@@ -130,6 +137,8 @@ int RunGui(HINSTANCE hInstance, int nCmdShow)
 
     if (!hwnd)
         return 0;
+
+    g_mainHwnd.store(hwnd);
 
     // Re-set the title; some Windows 11 builds don't pick it up from CreateWindowExW alone
     SetWindowTextW(hwnd, L"AutoLyrics");
@@ -488,6 +497,23 @@ void HandlePlaybackAction(HWND hwnd, int controlId)
     }
 }
 
+void SubmitLyrics(vector<LyricLine> lines)
+{
+    HWND hwnd = g_mainHwnd.load();
+    // The background fetch normally finishes well after the window is
+    // created, but wait briefly just in case it races window creation.
+    for (int i = 0; i < 200 && !hwnd; ++i)
+    {
+        Sleep(10);
+        hwnd = g_mainHwnd.load();
+    }
+    if (!hwnd)
+        return;
+
+    auto* linesPtr = new vector<LyricLine>(std::move(lines));
+    PostMessageW(hwnd, WM_APP_LYRICS_READY, 0, (LPARAM)linesPtr);
+}
+
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
     switch (msg)
@@ -496,6 +522,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         {
             HINSTANCE hInstance = ((LPCREATESTRUCTW)lParam)->hInstance;
             timeline_tracker::initialize(hwnd, hInstance);
+            lyrics_display::initialize(hwnd);
             CreateHeaderControls(hwnd, hInstance);
             CreateLanguageBarControls(hwnd, hInstance);
             CreateLyricsAreaControls(hwnd, hInstance);
@@ -547,17 +574,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             SelectObject(hdc, oldBrush);
             SelectObject(hdc, oldPen);
 
-            // --- Lyrics area placeholder: dim dotted outline, remove once real controls are added ---
-            HPEN hpenOutline = CreatePen(PS_DOT, 1, RGB(0x30, 0x30, 0x45));
-            oldPen = (HPEN)SelectObject(hdc, hpenOutline);
-            oldBrush = (HBRUSH)SelectObject(hdc, (HBRUSH)GetStockObject(NULL_BRUSH));
-            RoundRect(hdc,
-                CARD_LEFT + 2, LYRICS_AREA_TOP,
-                CARD_LEFT + CARD_WIDTH - 2, LYRICS_AREA_TOP + LYRICS_AREA_HEIGHT,
-                CARD_RADIUS, CARD_RADIUS);
-            SelectObject(hdc, oldPen);
-            SelectObject(hdc, oldBrush);
-            DeleteObject(hpenOutline);
+            // --- Lyrics display ---
+            RECT lyricsRect = {
+                CARD_LEFT, LYRICS_AREA_TOP,
+                CARD_LEFT + CARD_WIDTH, LYRICS_AREA_TOP + LYRICS_AREA_HEIGHT
+            };
+            lyrics_display::draw(hdc, lyricsRect);
 
             // --- Bottom card (blends with main window background) ---
             oldBrush = (HBRUSH)SelectObject(hdc, g_hbrBackground);
@@ -694,6 +716,22 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             if (wParam == timeline_tracker::TIMER_ID_TIMELINE_UPDATE)
             {
                 timeline_tracker::handle_timer();
+                lyrics_display::sync(timeline_tracker::get_current_position_seconds());
+            }
+            else if (wParam == lyrics_display::TIMER_ID_LYRICS_ANIM)
+            {
+                lyrics_display::handle_anim_timer();
+            }
+            return 0;
+        }
+
+        case WM_APP_LYRICS_READY:
+        {
+            auto* linesPtr = reinterpret_cast<vector<LyricLine>*>(lParam);
+            if (linesPtr)
+            {
+                lyrics_display::set_lines(std::move(*linesPtr));
+                delete linesPtr;
             }
             return 0;
         }
@@ -736,6 +774,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
         case WM_DESTROY:
             timeline_tracker::cleanup();
+            lyrics_display::cleanup();
+            g_mainHwnd.store(nullptr);
             if (g_hbrBackground)  { DeleteObject(g_hbrBackground);  g_hbrBackground = nullptr; }
             if (g_hbrCard)        { DeleteObject(g_hbrCard);        g_hbrCard = nullptr; }
             if (g_hbrEditBg)      { DeleteObject(g_hbrEditBg);      g_hbrEditBg = nullptr; }

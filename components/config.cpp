@@ -64,7 +64,10 @@ const int FONT_SIZE_LABEL      = 25;
 const int FONT_SIZE_TIME       = 14;
 const int FONT_SIZE_STATUS     = 14;
 const int FONT_SIZE_LANG       = 14;   // slightly smaller than artist (15)
-const int FONT_SIZE_LYRICS     = 18;   // placeholder for future lyrics display
+const int FONT_SIZE_LYRICS     = 18;   // normal (non-active) lyric line
+const int FONT_SIZE_LYRICS_CURRENT = 23; // active (center) lyric line
+const int LYRICS_LINE_SPACING      = 30;
+const UINT LYRICS_ANIM_DURATION_MS = 250;
 
 const wchar_t* const FONT_FACE_UI     = L"Segoe UI";
 const wchar_t* const FONT_FACE_SYMBOL = L"Segoe UI Symbol";

@@ -7,11 +7,8 @@
 #include "components/timeline_tracker.h"
 
 #include <windows.h>
-
-#include <nlohmann/json.hpp> // For JSON parsing
-
-// Namespace declarations for convenience
-using json = nlohmann::json;
+#include <thread>
+#include <cstdio>
 
 
 int main() {
@@ -28,20 +25,41 @@ int main() {
 
     if (media.is_success)
     {
+        // Lyrics search runs on its own thread so it doesn't block the GUI
+        // from opening: RunGui() below runs the message loop and doesn't
+        // return until the window closes, so both happen at the same time.
+        std::thread lyricsThread([media]() {
+            cout << "Fetching lyrics..." << "\n";
+            LyricsResult result = fetch_lyrics(media.title, media.artist);
+
+            if (!result.success)
+            {
+                cout << "No synced lyrics found." << "\n";
+                return;
+            }
+
+            cout << "Lyrics found (" << result.lines.size() << " lines):" << "\n";
+            for (const LyricLine& line : result.lines)
+            {
+                int mins = (int)(line.timestamp / 60.0f);
+                float secs = line.timestamp - mins * 60.0f;
+                wchar_t stamp[16];
+                swprintf(stamp, 16, L"%02d:%05.2f", mins, secs);
+                wcout << L"[" << stamp << L"] " << line.text << L"\n";
+            }
+
+            SubmitLyrics(std::move(result.lines));
+        });
+        lyricsThread.detach();
+
         cout << "Launching GUI..." << "\n";
         int guiExitCode = RunGui(GetModuleHandle(nullptr), SW_SHOWNORMAL);
         cout << "GUI exit code: " << guiExitCode << "\n";
-
-    //     cout << "Fetching lyrics..." << "\n";
-    //     string response = get_lyrics(media.title, media.artist);
-    //     json j = json::parse(response);
-    //     if (j["success"]) {
-    //         string lyrics = j["lyrics"];
-    //         cout << "Lyrics:\n" << lyrics << "\n";
-    //     }
-    // } else {
-    //     cout << "No media session active." << "\n";
-        }
+    }
+    else
+    {
+        cout << "No media session active." << "\n";
+    }
 
     cout << "**********************************************" << "\n";
     cout << "*                     End                    *" << "\n";
@@ -49,4 +67,3 @@ int main() {
 
     return 0;
 }
-
