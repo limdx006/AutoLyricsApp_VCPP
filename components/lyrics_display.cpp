@@ -141,7 +141,7 @@ namespace lyrics_display {
         int textWidth = textRight - textLeft;
 
         // Fixed vertical gap kept between adjacent lyric line blocks
-        const int LINE_MARGIN = 14;
+        const int LINE_MARGIN = 24;
 
         auto measureHeight = [&](const wstring& text, HFONT font) -> int
         {
