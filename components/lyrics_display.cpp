@@ -97,7 +97,7 @@ namespace lyrics_display {
             return;
 
         // Only animate the normal "advanced to the next line" case; seeks/jumps snap instantly.
-        bool animate = (g_currentIndex >= 0 && newIndex == g_currentIndex + 1);
+        bool animate = (newIndex == g_currentIndex + 1);
         g_currentIndex = newIndex;
 
         if (animate)
@@ -139,7 +139,7 @@ namespace lyrics_display {
 
     void draw(HDC hdc, const RECT& area)
     {
-        if (g_lines.empty() || g_currentIndex < 0)
+        if (g_lines.empty())
             return;
 
         const int horizontalMargin = 20; // pixels of padding left/right
