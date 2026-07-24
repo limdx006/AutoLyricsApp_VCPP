@@ -10,6 +10,7 @@ namespace lyrics_display {
     static bool g_animating = false;
     static ULONGLONG g_animStartTick = 0;
     static HFONT g_hFontNormal = nullptr;
+    static HFONT g_hFontNear = nullptr;
     static HFONT g_hFontCurrent = nullptr;
 
     static void ensure_fonts()
@@ -19,6 +20,11 @@ namespace lyrics_display {
 
         g_hFontNormal = CreateFontW(
             FONT_SIZE_LYRICS, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, FONT_FACE_UI);
+
+        g_hFontNear = CreateFontW(
+            FONT_SIZE_LYRICS_NEAR, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
             CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, FONT_FACE_UI);
 
@@ -44,6 +50,7 @@ namespace lyrics_display {
         g_hwnd = nullptr;
 
         if (g_hFontNormal)  { DeleteObject(g_hFontNormal);  g_hFontNormal = nullptr; }
+        if (g_hFontNear)    { DeleteObject(g_hFontNear);    g_hFontNear = nullptr; }
         if (g_hFontCurrent) { DeleteObject(g_hFontCurrent); g_hFontCurrent = nullptr; }
     }
 
@@ -152,37 +159,54 @@ namespace lyrics_display {
             return (std::max)(1, (int)(calc.bottom - calc.top));
         };
 
-        // Typical single-line height for normal-font lines (governs every
-        // gap except the two right next to the center line).
-        TEXTMETRICW tmNormal;
+        // Typical single-line height per tier (governs gaps not touching the center or near-neighbor slots, which get their real measured height below instead).
+        auto lineHeightFor = [&](HFONT font) -> int
         {
-            HFONT oldFont = (HFONT)SelectObject(hdc, g_hFontNormal);
-            GetTextMetricsW(hdc, &tmNormal);
+            TEXTMETRICW tm;
+            HFONT oldFont = (HFONT)SelectObject(hdc, font);
+            GetTextMetricsW(hdc, &tm);
             SelectObject(hdc, oldFont);
-        }
-        int normalLineHeight = tmNormal.tmHeight + tmNormal.tmExternalLeading;
+            return tm.tmHeight + tm.tmExternalLeading;
+        };
+        int normalLineHeight = lineHeightFor(g_hFontNormal);
+        int nearLineHeightTypical = lineHeightFor(g_hFontNear);
 
-        // Actual height of the (target) center line 
-        int currentHeight = measureHeight(g_lines[g_currentIndex].text, g_hFontCurrent);
+        // Real (possibly wrapped) height of a specific slot's line, measured fresh each frame
+        auto heightForSlot = [&](int slot) -> int
+        {
+            int idx = g_currentIndex + slot;
+            if (idx < 0 || idx >= (int)g_lines.size())
+                return normalLineHeight;
+            if (slot == 0)
+                return measureHeight(g_lines[idx].text, g_hFontCurrent);
+            if (std::abs(slot) == 1)
+                return measureHeight(g_lines[idx].text, g_hFontNear);
+            return normalLineHeight;
+        };
 
-        // Distance from the center slot to the slot right next to it has to account for the center block's real (possibly taller) height;
-        double firstStep = currentHeight / 2.0 + normalLineHeight / 2.0 + LINE_MARGIN;
-        double otherStep = normalLineHeight + LINE_MARGIN;
+        int currentHeight = heightForSlot(0);
 
-        // Y offset of a given whole slot (0 = center) from centerY.
+        // Fixed vertical gap kept between adjacent lyric line blocks
         auto slotOffsetY = [&](int slot) -> double
         {
             if (slot == 0) return 0.0;
-            double y = firstStep;
-            for (int s = 2; s <= std::abs(slot); ++s)
-                y += otherStep;
-            return slot > 0 ? y : -y;
+            int dir = slot > 0 ? 1 : -1;
+            double y = 0.0;
+            int prevHeight = currentHeight;
+            for (int s = 1; s <= std::abs(slot); ++s)
+            {
+                int h = heightForSlot(dir * s);
+                y += prevHeight / 2.0 + h / 2.0 + LINE_MARGIN;
+                prevHeight = h;
+            }
+            return dir * y;
         };
 
         // How many extra lines fit above/below the center within the area,
         // using the plain single-line spacing as the yardstick.
         int areaHeight = area.bottom - area.top;
-        int maxExtra = (int)(areaHeight / 2.0 / (otherStep)) ; // per side, rough fit
+        double otherStep = normalLineHeight + LINE_MARGIN;
+        int maxExtra = (int)(areaHeight / 2.0 / otherStep); // per side, rough fit
         if (maxExtra < 1) maxExtra = 1;
         int linesAbove = maxExtra;
         int linesBelow = maxExtra;
@@ -214,11 +238,14 @@ namespace lyrics_display {
             if (finalOffsetSlots < -(linesAbove + 1.0) || finalOffsetSlots > (linesBelow + 1.0))
                 continue;
 
-            double closeness = (std::max)(0.0, 1.0 - std::abs(finalOffsetSlots)); // 1 at center, 0 a slot away
-            HFONT font = (closeness > 0.5) ? g_hFontCurrent : g_hFontNormal;
+            // 3-tier font: highlighted (center), near-neighbor, or far.
+            // Thresholds sit at the midpoints between slots so the switch happens mid-slide rather than exactly on arrival.
+            double absOffset = std::abs(finalOffsetSlots);
+            HFONT font = (absOffset < 0.5) ? g_hFontCurrent
+                       : (absOffset < 1.5) ? g_hFontNear
+                       : g_hFontNormal;
 
             // 3-stop color gradient: white at the center, a brighter "near" tone at the immediate neighbor (offset ~1)
-            double absOffset = std::abs(finalOffsetSlots);
             COLORREF color;
             if (absOffset <= 1.0)
                 color = lerp_color(APP_COLOR_LIGHT_TEXT, APP_COLOR_LYRICS_NEAR, absOffset);
@@ -233,7 +260,9 @@ namespace lyrics_display {
             double y1 = slotOffsetY(highSlot);
             double yOffset = y0 + (y1 - y0) * frac;
 
-            int blockHeight = (font == g_hFontCurrent) ? currentHeight : normalLineHeight;
+            int blockHeight = (font == g_hFontCurrent) ? currentHeight
+                             : (font == g_hFontNear)    ? (std::abs(newOffsetSlots) <= 1 ? heightForSlot((int)newOffsetSlots) : nearLineHeightTypical)
+                             : normalLineHeight;
             int y = centerY + (int)std::lround(yOffset);
             RECT lineRect = { textLeft, y - blockHeight / 2 - 2, textRight, y + blockHeight / 2 + 2 };
 

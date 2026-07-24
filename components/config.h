@@ -107,7 +107,8 @@ extern const int FONT_SIZE_LABEL;
 extern const int FONT_SIZE_TIME;
 extern const int FONT_SIZE_STATUS;
 extern const int FONT_SIZE_LANG;    // language bar (slightly smaller than artist)
-extern const int FONT_SIZE_LYRICS;  // lyrics text (normal, non-active lines)
+extern const int FONT_SIZE_LYRICS;  // far lines (2+ away from the highlighted line)
+extern const int FONT_SIZE_LYRICS_NEAR;    // line immediately before/after the highlighted one
 extern const int FONT_SIZE_LYRICS_CURRENT; // active (center) lyric line -- bigger + bold
 extern const int LYRICS_LINE_SPACING;      // vertical distance between stacked lyric lines
 extern const UINT LYRICS_ANIM_DURATION_MS; // how long the slide-to-next-line animation takes
