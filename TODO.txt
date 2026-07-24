@@ -1,5 +1,3 @@
-- Lyrics display
-- Offset
 - Language detection
 - Translation
 - Setting (Window and text size)

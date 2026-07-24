@@ -119,7 +119,7 @@ void CommitOffsetEdit(HWND hEdit)
     float newOffset = lyrics_display::get_offset();
     if (!text.empty() && text != L"-")
     {
-        try { newOffset = std::stof(string(text.begin(), text.end())); } // ASCII-only content, safe to narrow directly
+        try { newOffset = std::wcstof(text.c_str(), nullptr); }
         catch (...) {}
     }
 
