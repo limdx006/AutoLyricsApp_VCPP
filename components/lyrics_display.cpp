@@ -216,7 +216,14 @@ namespace lyrics_display {
 
             double closeness = (std::max)(0.0, 1.0 - std::abs(finalOffsetSlots)); // 1 at center, 0 a slot away
             HFONT font = (closeness > 0.5) ? g_hFontCurrent : g_hFontNormal;
-            COLORREF color = lerp_color(APP_COLOR_ARTIST_TEXT, APP_COLOR_LIGHT_TEXT, closeness);
+
+            // 3-stop color gradient: white at the center, a brighter "near" tone at the immediate neighbor (offset ~1)
+            double absOffset = std::abs(finalOffsetSlots);
+            COLORREF color;
+            if (absOffset <= 1.0)
+                color = lerp_color(APP_COLOR_LIGHT_TEXT, APP_COLOR_LYRICS_NEAR, absOffset);
+            else
+                color = lerp_color(APP_COLOR_LYRICS_NEAR, APP_COLOR_LYRICS_FAR, (std::min)(1.0, absOffset - 1.0));
 
             // Interpolate between the (fixed) integer-slot Y positions
             int lowSlot = (int)std::floor(finalOffsetSlots);

@@ -121,6 +121,8 @@ extern const COLORREF APP_COLOR_EDIT_BG;      // offset value box bg
 extern const COLORREF APP_COLOR_SONG_TEXT;    // song name accent color
 extern const COLORREF APP_COLOR_ARTIST_TEXT;  // artist name color
 extern const COLORREF APP_COLOR_LIGHT_TEXT;   // icon labels / offset label color
+extern const COLORREF APP_COLOR_LYRICS_NEAR;  // lyric line immediately before/after the highlighted one
+extern const COLORREF APP_COLOR_LYRICS_FAR;   // lyric lines two or more away from the highlighted one
 extern const COLORREF APP_COLOR_EDIT_TEXT;    // offset value text color
 extern const COLORREF APP_COLOR_ICON_HOVER;   // PTT/Refresh/Settings hover color
 extern const COLORREF APP_COLOR_PROGRESS_BAR; // progress bar fill color
