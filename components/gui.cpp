@@ -694,14 +694,14 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             int barBottom = barTop + PROGRESS_BAR_HEIGHT;
             int barWidth  = barRight - barLeft;
 
-            double duration = timeline_tracker::get_duration_seconds();
-            double position = timeline_tracker::get_current_position_seconds();
+            float duration = timeline_tracker::get_duration_seconds();
+            float position = timeline_tracker::get_current_position_seconds();
             int fillWidth = 0;
-            if (duration > 0.0)
+            if (duration > 0.0f)
             {
-                double ratio = position / duration;
-                if (ratio < 0.0) ratio = 0.0;
-                if (ratio > 1.0) ratio = 1.0;
+                float ratio = position / duration;
+                if (ratio < 0.0f) ratio = 0.0f;
+                if (ratio > 1.0f) ratio = 1.0f;
                 fillWidth = static_cast<int>(barWidth * ratio);
             }
             else

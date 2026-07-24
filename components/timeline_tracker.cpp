@@ -10,12 +10,12 @@
 namespace timeline_tracker {
     static HWND g_hwnd = nullptr;
     static HINSTANCE g_hInstance = nullptr;
-    static double g_current_position_seconds = 0.0;
-    static double g_duration_seconds = 0.0;
+    static float g_current_position_seconds = 0.0f;
+    static float g_duration_seconds = 0.0f;
     static bool g_is_playing = false;
     static bool g_has_valid_position = false;
     static ULONGLONG g_last_update_tick = 0;
-    static double g_last_window_position_seconds = -1.0;
+    static float g_last_window_position_seconds = -1.0f;
     static bool g_has_window_position = false;
     static wstring g_current_title;
     static wstring g_current_artist;
@@ -27,8 +27,8 @@ namespace timeline_tracker {
         if (g_hwnd == nullptr)
             return;
 
-        std::string currentTimeText = format_display_time(static_cast<float>(g_current_position_seconds));
-        std::string endTimeText = format_display_time(static_cast<float>(g_duration_seconds));
+        std::string currentTimeText = format_display_time(g_current_position_seconds);
+        std::string endTimeText = format_display_time(g_duration_seconds);
         CURRENT_TIME = std::wstring(currentTimeText.begin(), currentTimeText.end());
         END_TIME = std::wstring(endTimeText.begin(), endTimeText.end());
 
@@ -133,13 +133,13 @@ namespace timeline_tracker {
             }).detach();
         }
 
-        const double window_position = (std::max)(0.0, static_cast<double>(media.position));
-        const double window_duration = (std::max)(0.0, static_cast<double>(media.duration));
+        const float window_position = (std::max)(0.0f, media.position);
+        const float window_duration = (std::max)(0.0f, media.duration);
 
-        if (g_has_window_position && g_last_window_position_seconds >= 0.0)
+        if (g_has_window_position && g_last_window_position_seconds >= 0.0f)
         {
-            const double position_delta = std::abs(window_position - g_last_window_position_seconds);
-            if (position_delta < 0.001)
+            const float position_delta = std::abs(window_position - g_last_window_position_seconds);
+            if (position_delta < 0.001f)
             {
                 g_duration_seconds = window_duration;
                 g_is_playing = media.is_playing;
@@ -170,12 +170,12 @@ namespace timeline_tracker {
         updateTimelineDisplay();
     }
 
-    double get_current_position_seconds()
+    float get_current_position_seconds()
     {
         return g_current_position_seconds;
     }
 
-    double get_duration_seconds()
+    float get_duration_seconds()
     {
         return g_duration_seconds;
     }
@@ -210,14 +210,14 @@ namespace timeline_tracker {
             return;
 
         const ULONGLONG now = GetTickCount64();
-        const double elapsed_seconds = static_cast<double>(now - g_last_update_tick) / 1000.0;
-        if (elapsed_seconds <= 0.0)
+        const float elapsed_seconds = static_cast<float>(now - g_last_update_tick) / 1000.0f;
+        if (elapsed_seconds <= 0.0f)
             return;
 
         if (g_is_playing)
         {
             g_current_position_seconds += elapsed_seconds;
-            if (g_duration_seconds > 0.0)
+            if (g_duration_seconds > 0.0f)
                 g_current_position_seconds = (std::min)(g_current_position_seconds, g_duration_seconds);
         }
 

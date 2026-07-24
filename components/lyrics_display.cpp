@@ -70,7 +70,7 @@ namespace lyrics_display {
     }
 
     // Last line whose timestamp <= position_seconds, or -1 if before the first line.
-    static int find_active_index(double position_seconds)
+    static int find_active_index(float position_seconds)
     {
         int lo = 0, hi = (int)g_lines.size() - 1, result = -1;
         while (lo <= hi)
@@ -89,7 +89,7 @@ namespace lyrics_display {
         return result;
     }
 
-    void sync(double position_seconds)
+    void sync(float position_seconds)
     {
         if (g_lines.empty() || !g_hwnd)
             return;
@@ -146,7 +146,7 @@ namespace lyrics_display {
         g_offsetSeconds = DEFAULT_OFFSET;
     }
 
-    static COLORREF lerp_color(COLORREF a, COLORREF b, double t)
+    static COLORREF lerp_color(COLORREF a, COLORREF b, float t)
     {
         auto lerp = [t](BYTE ca, BYTE cb) { return (BYTE)(ca + (cb - ca) * t); };
         return RGB(lerp(GetRValue(a), GetRValue(b)),
@@ -203,16 +203,16 @@ namespace lyrics_display {
         int currentHeight = heightForSlot(0);
 
         // Fixed vertical gap kept between adjacent lyric line blocks
-        auto slotOffsetY = [&](int slot) -> double
+        auto slotOffsetY = [&](int slot) -> float
         {
-            if (slot == 0) return 0.0;
+            if (slot == 0) return 0.0f;
             int dir = slot > 0 ? 1 : -1;
-            double y = 0.0;
+            float y = 0.0f;
             int prevHeight = currentHeight;
             for (int s = 1; s <= std::abs(slot); ++s)
             {
                 int h = heightForSlot(dir * s);
-                y += prevHeight / 2.0 + h / 2.0 + LINE_MARGIN;
+                y += prevHeight / 2.0f + h / 2.0f + LINE_MARGIN;
                 prevHeight = h;
             }
             return dir * y;
@@ -221,20 +221,20 @@ namespace lyrics_display {
         // How many extra lines fit above/below the center within the area,
         // using the plain single-line spacing as the yardstick.
         int areaHeight = area.bottom - area.top;
-        double otherStep = normalLineHeight + LINE_MARGIN;
-        int maxExtra = (int)(areaHeight / 2.0 / otherStep); // per side, rough fit
+        float otherStep = normalLineHeight + LINE_MARGIN;
+        int maxExtra = (int)(areaHeight / 2.0f / otherStep); // per side, rough fit
         if (maxExtra < 1) maxExtra = 1;
         int linesAbove = maxExtra;
         int linesBelow = maxExtra;
 
         // 0 = just started sliding, 1 = settled on the new current line. Ease-out cubic for a smooth finish.
-        double t = 1.0;
+        float t = 1.0f;
         if (g_animating)
         {
-            double raw = (std::min)(1.0, (double)(GetTickCount64() - g_animStartTick) / LYRICS_ANIM_DURATION_MS);
-            t = 1.0 - std::pow(1.0 - raw, 3.0);
+            float raw = (std::min)(1.0f, (float)(GetTickCount64() - g_animStartTick) / LYRICS_ANIM_DURATION_MS);
+            t = 1.0f - std::pow(1.0f - raw, 3.0f);
         }
-        double shift = g_animating ? (1.0 - t) : 0.0; // extra slots of vertical shift, 1 -> 0 over the animation
+        float shift = g_animating ? (1.0f - t) : 0.0f; // extra slots of vertical shift, 1 -> 0 over the animation
 
         int centerY = (area.top + area.bottom) / 2;
 
@@ -247,10 +247,10 @@ namespace lyrics_display {
         int maxIndex = (std::min)((int)g_lines.size() - 1, g_currentIndex + linesBelow + 1);
 
         // Maps a signed slot offset to font size and weight with smooth interpolation.
-        auto fontParamsForOffset = [](double absOffset, int& outSize, int& outWeight)
+        auto fontParamsForOffset = [](float absOffset, int& outSize, int& outWeight)
         {
             float size, weight;
-            if (absOffset <= 1.0)
+            if (absOffset <= 1.0f)
             {
                 float t = static_cast<float>(absOffset);
                 size = std::lerp(static_cast<float>(FONT_SIZE_LYRICS_CURRENT),
@@ -258,9 +258,9 @@ namespace lyrics_display {
                 weight = std::lerp(static_cast<float>(FW_BOLD),
                                    static_cast<float>(FW_NORMAL), t);
             }
-            else if (absOffset <= 2.0)
+            else if (absOffset <= 2.0f)
             {
-                float t = static_cast<float>(absOffset - 1.0);
+                float t = static_cast<float>(absOffset - 1.0f);
                 size = std::lerp(static_cast<float>(FONT_SIZE_LYRICS_NEAR),
                                  static_cast<float>(FONT_SIZE_LYRICS), t);
                 weight = static_cast<float>(FW_NORMAL);
@@ -276,14 +276,14 @@ namespace lyrics_display {
 
         for (int i = minIndex; i <= maxIndex; ++i)
         {
-            double newOffsetSlots = i - g_currentIndex;   // this line's settled target slot
-            double finalOffsetSlots = newOffsetSlots + shift; // shifted while animating
+            float newOffsetSlots = i - g_currentIndex;   // this line's settled target slot
+            float finalOffsetSlots = newOffsetSlots + shift; // shifted while animating
 
-            if (finalOffsetSlots < -(linesAbove + 1.0) || finalOffsetSlots > (linesBelow + 1.0))
+            if (finalOffsetSlots < -(linesAbove + 1.0f) || finalOffsetSlots > (linesBelow + 1.0f))
                 continue;
 
             // Continuous font size/weight based on distance from centre.
-            double absOffset = std::abs(finalOffsetSlots);
+            float absOffset = std::abs(finalOffsetSlots);
             int fontSize, fontWeight;
             fontParamsForOffset(absOffset, fontSize, fontWeight);
             HFONT font = CreateFontW(
@@ -293,18 +293,18 @@ namespace lyrics_display {
 
             // 3-stop color gradient: white at the center, a brighter "near" tone at the immediate neighbor (offset ~1)
             COLORREF color;
-            if (absOffset <= 1.0)
+            if (absOffset <= 1.0f)
                 color = lerp_color(APP_COLOR_LIGHT_TEXT, APP_COLOR_LYRICS_NEAR, absOffset);
             else
-                color = lerp_color(APP_COLOR_LYRICS_NEAR, APP_COLOR_LYRICS_FAR, (std::min)(1.0, absOffset - 1.0));
+                color = lerp_color(APP_COLOR_LYRICS_NEAR, APP_COLOR_LYRICS_FAR, (std::min)(1.0f, absOffset - 1.0f));
 
             // Interpolate between the (fixed) integer-slot Y positions
             int lowSlot = (int)std::floor(finalOffsetSlots);
             int highSlot = lowSlot + 1;
-            double frac = finalOffsetSlots - lowSlot;
-            double y0 = slotOffsetY(lowSlot);
-            double y1 = slotOffsetY(highSlot);
-            double yOffset = y0 + (y1 - y0) * frac;
+            float frac = finalOffsetSlots - lowSlot;
+            float y0 = slotOffsetY(lowSlot);
+            float y1 = slotOffsetY(highSlot);
+            float yOffset = y0 + (y1 - y0) * frac;
 
             int blockHeight = measureHeight(g_lines[i].text, font);
             int y = centerY + (int)std::lround(yOffset);
