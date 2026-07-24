@@ -135,40 +135,57 @@ namespace lyrics_display {
         if (g_lines.empty() || g_currentIndex < 0)
             return;
 
-        // Measure line height using both fonts to get the maximum height needed
-        int fontHeight = 0;
-        {
-            HFONT hOld = (HFONT)SelectObject(hdc, g_hFontNormal);
-            TEXTMETRICW tm;
-            GetTextMetricsW(hdc, &tm);
-            fontHeight = tm.tmHeight + tm.tmExternalLeading;
-            SelectObject(hdc, hOld);
-        }
-        {
-            HFONT hOld = (HFONT)SelectObject(hdc, g_hFontCurrent);
-            TEXTMETRICW tm;
-            GetTextMetricsW(hdc, &tm);
-            int h = tm.tmHeight + tm.tmExternalLeading;
-            if (h > fontHeight)
-                fontHeight = h;
-            SelectObject(hdc, hOld);
-        }
-        if (fontHeight <= 0)
-            fontHeight = 1; // avoid division by zero
+        const int horizontalMargin = 20; // pixels of padding left/right
+        int textLeft  = area.left + horizontalMargin;
+        int textRight = area.right - horizontalMargin;
+        int textWidth = textRight - textLeft;
 
-        // Slot height (distance between centers of consecutive lines, includes gap)
-        // Make it large enough to allow a line to wrap to two lines.
-        const int slotHeight = static_cast<int>(fontHeight * 2.2f); // ~2.2 lines height
+        // Fixed vertical gap kept between adjacent lyric line blocks
+        const int LINE_MARGIN = 14;
 
+        auto measureHeight = [&](const wstring& text, HFONT font) -> int
+        {
+            RECT calc = { 0, 0, textWidth, 0 };
+            HFONT oldFont = (HFONT)SelectObject(hdc, font);
+            DrawTextW(hdc, text.c_str(), -1, &calc, DT_CENTER | DT_WORDBREAK | DT_CALCRECT | DT_NOPREFIX);
+            SelectObject(hdc, oldFont);
+            return (std::max)(1, (int)(calc.bottom - calc.top));
+        };
+
+        // Typical single-line height for normal-font lines (governs every
+        // gap except the two right next to the center line).
+        TEXTMETRICW tmNormal;
+        {
+            HFONT oldFont = (HFONT)SelectObject(hdc, g_hFontNormal);
+            GetTextMetricsW(hdc, &tmNormal);
+            SelectObject(hdc, oldFont);
+        }
+        int normalLineHeight = tmNormal.tmHeight + tmNormal.tmExternalLeading;
+
+        // Actual height of the (target) center line 
+        int currentHeight = measureHeight(g_lines[g_currentIndex].text, g_hFontCurrent);
+
+        // Distance from the center slot to the slot right next to it has to account for the center block's real (possibly taller) height;
+        double firstStep = currentHeight / 2.0 + normalLineHeight / 2.0 + LINE_MARGIN;
+        double otherStep = normalLineHeight + LINE_MARGIN;
+
+        // Y offset of a given whole slot (0 = center) from centerY.
+        auto slotOffsetY = [&](int slot) -> double
+        {
+            if (slot == 0) return 0.0;
+            double y = firstStep;
+            for (int s = 2; s <= std::abs(slot); ++s)
+                y += otherStep;
+            return slot > 0 ? y : -y;
+        };
+
+        // How many extra lines fit above/below the center within the area,
+        // using the plain single-line spacing as the yardstick.
         int areaHeight = area.bottom - area.top;
-        // Maximum number of lines that can fit vertically (using slotHeight)
-        int maxLines = areaHeight / slotHeight;
-        if (maxLines < 1)
-            maxLines = 1;
-
-        // Lines to show above and below the current line (to center current line as much as possible)
-        int linesAbove = (maxLines - 1) / 2;
-        int linesBelow = maxLines - 1 - linesAbove;
+        int maxExtra = (int)(areaHeight / 2.0 / (otherStep)) ; // per side, rough fit
+        if (maxExtra < 1) maxExtra = 1;
+        int linesAbove = maxExtra;
+        int linesBelow = maxExtra;
 
         // 0 = just started sliding, 1 = settled on the new current line. Ease-out cubic for a smooth finish.
         double t = 1.0;
@@ -177,6 +194,7 @@ namespace lyrics_display {
             double raw = (std::min)(1.0, (double)(GetTickCount64() - g_animStartTick) / LYRICS_ANIM_DURATION_MS);
             t = 1.0 - std::pow(1.0 - raw, 3.0);
         }
+        double shift = g_animating ? (1.0 - t) : 0.0; // extra slots of vertical shift, 1 -> 0 over the animation
 
         int centerY = (area.top + area.bottom) / 2;
 
@@ -185,44 +203,37 @@ namespace lyrics_display {
         IntersectClipRect(hdc, area.left, area.top, area.right, area.bottom);
         int oldBkMode = SetBkMode(hdc, TRANSPARENT);
 
-        // Determine a safe range of indices to consider (we'll cull by offset later)
-        int minIndex = g_currentIndex - maxLines - 2;
-        int maxIndex = g_currentIndex + maxLines + 2;
-        if (minIndex < 0) minIndex = 0;
-        if (maxIndex >= (int)g_lines.size()) maxIndex = (int)g_lines.size() - 1;
+        int minIndex = (std::max)(0, g_currentIndex - linesAbove - 1);
+        int maxIndex = (std::min)((int)g_lines.size() - 1, g_currentIndex + linesBelow + 1);
 
         for (int i = minIndex; i <= maxIndex; ++i)
         {
-            // Compute offset in lines (slots) from current index
-            double lineOffset = i - g_currentIndex;
-            double finalOffset = lineOffset;
-            if (g_animating)
-            {
-                // When animating, shift the entire stack by (1-t) slots in the direction opposite to the change
-                // (so that lines slide up when advancing to a higher index)
-                finalOffset += (1.0 - t);
-            }
+            double newOffsetSlots = i - g_currentIndex;   // this line's settled target slot
+            double finalOffsetSlots = newOffsetSlots + shift; // shifted while animating
 
-            // Check if this line is within the visible range (with a little extra for animation)
-            if (finalOffset < -(linesAbove + 1.0) || finalOffset > (linesBelow + 1.0))
+            if (finalOffsetSlots < -(linesAbove + 1.0) || finalOffsetSlots > (linesBelow + 1.0))
                 continue;
 
-            double closeness = (std::max)(0.0, 1.0 - std::abs(finalOffset)); // 1 at center, 0 a slot away
+            double closeness = (std::max)(0.0, 1.0 - std::abs(finalOffsetSlots)); // 1 at center, 0 a slot away
             HFONT font = (closeness > 0.5) ? g_hFontCurrent : g_hFontNormal;
             COLORREF color = lerp_color(APP_COLOR_ARTIST_TEXT, APP_COLOR_LIGHT_TEXT, closeness);
 
-            int y = centerY + static_cast<int>(std::lround(finalOffset * slotHeight));
-            const int horizontalMargin = 20; // pixels of padding left/right
-            // Use slotHeight as the rectangle height to allow wrapping (up to ~2 lines)
-            RECT lineRect = { area.left + horizontalMargin, 
-                              y - slotHeight / 2, 
-                              area.right - horizontalMargin, 
-                              y + slotHeight / 2 };
+            // Interpolate between the (fixed) integer-slot Y positions
+            int lowSlot = (int)std::floor(finalOffsetSlots);
+            int highSlot = lowSlot + 1;
+            double frac = finalOffsetSlots - lowSlot;
+            double y0 = slotOffsetY(lowSlot);
+            double y1 = slotOffsetY(highSlot);
+            double yOffset = y0 + (y1 - y0) * frac;
+
+            int blockHeight = (font == g_hFontCurrent) ? currentHeight : normalLineHeight;
+            int y = centerY + (int)std::lround(yOffset);
+            RECT lineRect = { textLeft, y - blockHeight / 2 - 2, textRight, y + blockHeight / 2 + 2 };
 
             HFONT oldFont = (HFONT)SelectObject(hdc, font);
             SetTextColor(hdc, color);
             DrawTextW(hdc, g_lines[i].text.c_str(), -1, &lineRect,
-                DT_CENTER | DT_WORDBREAK | DT_VCENTER | DT_NOPREFIX);
+                DT_CENTER | DT_WORDBREAK | DT_NOPREFIX);
             SelectObject(hdc, oldFont);
         }
 
