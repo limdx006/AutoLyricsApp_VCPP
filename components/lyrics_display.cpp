@@ -186,7 +186,6 @@ namespace lyrics_display {
             return tm.tmHeight + tm.tmExternalLeading;
         };
         int normalLineHeight = lineHeightFor(g_hFontNormal);
-        int nearLineHeightTypical = lineHeightFor(g_hFontNear);
 
         // Real (possibly wrapped) height of a specific slot's line, measured fresh each frame
         auto heightForSlot = [&](int slot) -> int
@@ -247,6 +246,34 @@ namespace lyrics_display {
         int minIndex = (std::max)(0, g_currentIndex - linesAbove - 1);
         int maxIndex = (std::min)((int)g_lines.size() - 1, g_currentIndex + linesBelow + 1);
 
+        // Maps a signed slot offset to font size and weight with smooth interpolation.
+        auto fontParamsForOffset = [](double absOffset, int& outSize, int& outWeight)
+        {
+            float size, weight;
+            if (absOffset <= 1.0)
+            {
+                float t = static_cast<float>(absOffset);
+                size = std::lerp(static_cast<float>(FONT_SIZE_LYRICS_CURRENT),
+                                 static_cast<float>(FONT_SIZE_LYRICS_NEAR), t);
+                weight = std::lerp(static_cast<float>(FW_BOLD),
+                                   static_cast<float>(FW_NORMAL), t);
+            }
+            else if (absOffset <= 2.0)
+            {
+                float t = static_cast<float>(absOffset - 1.0);
+                size = std::lerp(static_cast<float>(FONT_SIZE_LYRICS_NEAR),
+                                 static_cast<float>(FONT_SIZE_LYRICS), t);
+                weight = static_cast<float>(FW_NORMAL);
+            }
+            else
+            {
+                size = static_cast<float>(FONT_SIZE_LYRICS);
+                weight = static_cast<float>(FW_NORMAL);
+            }
+            outSize = static_cast<int>(std::round(size));
+            outWeight = static_cast<int>(std::round(weight));
+        };
+
         for (int i = minIndex; i <= maxIndex; ++i)
         {
             double newOffsetSlots = i - g_currentIndex;   // this line's settled target slot
@@ -255,12 +282,14 @@ namespace lyrics_display {
             if (finalOffsetSlots < -(linesAbove + 1.0) || finalOffsetSlots > (linesBelow + 1.0))
                 continue;
 
-            // 3-tier font: highlighted (center), near-neighbor, or far.
-            // Thresholds sit at the midpoints between slots so the switch happens mid-slide rather than exactly on arrival.
+            // Continuous font size/weight based on distance from centre.
             double absOffset = std::abs(finalOffsetSlots);
-            HFONT font = (absOffset < 0.5) ? g_hFontCurrent
-                       : (absOffset < 1.5) ? g_hFontNear
-                       : g_hFontNormal;
+            int fontSize, fontWeight;
+            fontParamsForOffset(absOffset, fontSize, fontWeight);
+            HFONT font = CreateFontW(
+                fontSize, 0, 0, 0, fontWeight, FALSE, FALSE, FALSE,
+                DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, FONT_FACE_UI);
 
             // 3-stop color gradient: white at the center, a brighter "near" tone at the immediate neighbor (offset ~1)
             COLORREF color;
@@ -277,9 +306,7 @@ namespace lyrics_display {
             double y1 = slotOffsetY(highSlot);
             double yOffset = y0 + (y1 - y0) * frac;
 
-            int blockHeight = (font == g_hFontCurrent) ? currentHeight
-                             : (font == g_hFontNear)    ? (std::abs(newOffsetSlots) <= 1 ? heightForSlot((int)newOffsetSlots) : nearLineHeightTypical)
-                             : normalLineHeight;
+            int blockHeight = measureHeight(g_lines[i].text, font);
             int y = centerY + (int)std::lround(yOffset);
             RECT lineRect = { textLeft, y - blockHeight / 2 - 2, textRight, y + blockHeight / 2 + 2 };
 
@@ -288,6 +315,7 @@ namespace lyrics_display {
             DrawTextW(hdc, g_lines[i].text.c_str(), -1, &lineRect,
                 DT_CENTER | DT_WORDBREAK | DT_NOPREFIX);
             SelectObject(hdc, oldFont);
+            DeleteObject(font);
         }
 
         SetBkMode(hdc, oldBkMode);
