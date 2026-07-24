@@ -12,6 +12,7 @@ namespace lyrics_display {
     static HFONT g_hFontNormal = nullptr;
     static HFONT g_hFontNear = nullptr;
     static HFONT g_hFontCurrent = nullptr;
+    static float g_offsetSeconds = 0.3f; // positive = lyrics shown that many seconds earlier
 
     static void ensure_fonts()
     {
@@ -92,7 +93,7 @@ namespace lyrics_display {
         if (g_lines.empty() || !g_hwnd)
             return;
 
-        int newIndex = find_active_index(position_seconds);
+        int newIndex = find_active_index(position_seconds + g_offsetSeconds);
         if (newIndex == g_currentIndex)
             return;
 
@@ -127,6 +128,16 @@ namespace lyrics_display {
         }
 
         InvalidateRect(g_hwnd, nullptr, FALSE);
+    }
+
+    float get_offset()
+    {
+        return g_offsetSeconds;
+    }
+
+    void set_offset(float offset_seconds)
+    {
+        g_offsetSeconds = offset_seconds;
     }
 
     static COLORREF lerp_color(COLORREF a, COLORREF b, double t)

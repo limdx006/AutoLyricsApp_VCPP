@@ -22,6 +22,10 @@ namespace lyrics_display {
     // Call when TIMER_ID_LYRICS_ANIM fires; advances/ends the animation.
     void handle_anim_timer();
 
+    // Seconds added to the playback position before matching a line; positive = lyrics appear earlier.
+    float get_offset();
+    void set_offset(float offset_seconds);
+
     // Draws the currently visible lyric lines into the given area of hdc.
     void draw(HDC hdc, const RECT& area);
 }

@@ -11,6 +11,8 @@
 #include <algorithm>
 #include <atomic>
 #include <utility>
+#include <cmath>
+#include <cwctype>
 
 // Set once the main window exists; lets a background thread (the lyrics
 // fetch) safely hand results to the GUI thread via PostMessage.
@@ -90,6 +92,93 @@ LRESULT CALLBACK IconHoverSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
             RemoveWindowSubclass(hwnd, IconHoverSubclassProc, uIdSubclass);
             break;
     }
+    return DefSubclassProc(hwnd, msg, wParam, lParam);
+}
+
+// Rounds to 1 decimal, clamps to a sane range, stores it, and reformats the edit box text
+void ApplyOffset(HWND hEdit, float newOffset)
+{
+    newOffset = std::round(newOffset * 10.0f) / 10.0f;
+    newOffset = (std::max)(-9.9f, (std::min)(9.9f, newOffset));
+
+    lyrics_display::set_offset(newOffset);
+
+    wchar_t buf[16];
+    swprintf(buf, 16, L"%.1f", newOffset);
+    SetWindowTextW(hEdit, buf);
+}
+
+// Parses whatever the user typed and commits it via ApplyOffset (falls back to the current value if unparsable)
+void CommitOffsetEdit(HWND hEdit)
+{
+    int len = GetWindowTextLengthW(hEdit);
+    wstring text(len, L'\0');
+    if (len > 0)
+        GetWindowTextW(hEdit, &text[0], len + 1);
+
+    float newOffset = lyrics_display::get_offset();
+    if (!text.empty() && text != L"-")
+    {
+        try { newOffset = std::stof(string(text.begin(), text.end())); } // ASCII-only content, safe to narrow directly
+        catch (...) {}
+    }
+
+    ApplyOffset(hEdit, newOffset);
+}
+
+// Restricts typed input to: optional leading '-', digits, optional '.', at most one digit after it
+LRESULT CALLBACK OffsetEditSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam,
+                                         UINT_PTR uIdSubclass, DWORD_PTR)
+{
+    if (msg == WM_CHAR && wParam >= 0x20) // let control chars (backspace, etc.) through untouched
+    {
+        int len = GetWindowTextLengthW(hwnd);
+        wstring text(len, L'\0');
+        if (len > 0)
+            GetWindowTextW(hwnd, &text[0], len + 1);
+
+        DWORD selStart = 0, selEnd = 0;
+        SendMessageW(hwnd, EM_GETSEL, (WPARAM)&selStart, (LPARAM)&selEnd);
+        wstring candidate = text.substr(0, selStart) + (wchar_t)wParam + text.substr(selEnd);
+
+        bool valid = (candidate == L"-");
+        size_t i = 0;
+        if (!valid)
+        {
+            if (i < candidate.size() && candidate[i] == L'-') i++;
+            while (i < candidate.size() && iswdigit(candidate[i])) i++;
+            if (i < candidate.size() && candidate[i] == L'.')
+            {
+                i++;
+                size_t digitsAfterDot = 0;
+                while (i < candidate.size() && iswdigit(candidate[i])) { i++; digitsAfterDot++; }
+                valid = (digitsAfterDot <= 1);
+            }
+            else
+            {
+                valid = true;
+            }
+            if (i != candidate.size())
+                valid = false; // leftover characters that didn't match the pattern above
+        }
+
+        if (!valid)
+            return 0; // swallow the character
+    }
+    else if (msg == WM_KEYDOWN && wParam == VK_RETURN)
+    {
+        CommitOffsetEdit(hwnd);
+        return 0;
+    }
+    else if (msg == WM_KILLFOCUS)
+    {
+        CommitOffsetEdit(hwnd);
+    }
+    else if (msg == WM_NCDESTROY)
+    {
+        RemoveWindowSubclass(hwnd, OffsetEditSubclassProc, uIdSubclass);
+    }
+
     return DefSubclassProc(hwnd, msg, wParam, lParam);
 }
 
@@ -301,12 +390,17 @@ void CreateHeaderControls(HWND parent, HINSTANCE hInstance)
     SendMessageW(hBtnMinus, WM_SETFONT, (WPARAM)g_hFontLabel, TRUE);
     cx += OFFSET_BTN_SIZE + OFFSET_GAP_MINUS_TO_EDIT;
 
+    wchar_t offsetBuf[16];
+    swprintf(offsetBuf, 16, L"%.1f", lyrics_display::get_offset());
+
     HWND hEditOffset = CreateWindowW(
-        L"EDIT", OFFSET_VALUE,
-        WS_CHILD | WS_VISIBLE | WS_BORDER | ES_CENTER | ES_READONLY,
+        L"EDIT", offsetBuf,
+        WS_CHILD | WS_VISIBLE | WS_BORDER | ES_CENTER,
         cx, rowCenterY - OFFSET_EDIT_HEIGHT / 2, OFFSET_EDIT_WIDTH, OFFSET_EDIT_HEIGHT,
         parent, (HMENU)ID_EDIT_OFFSET, hInstance, nullptr);
     SendMessageW(hEditOffset, WM_SETFONT, (WPARAM)g_hFontLabel, TRUE);
+    SendMessageW(hEditOffset, EM_LIMITTEXT, 6, 0); // e.g. "-12.3"
+    SetWindowSubclass(hEditOffset, OffsetEditSubclassProc, 1, 0);
     cx += OFFSET_EDIT_WIDTH + OFFSET_GAP_EDIT_TO_PLUS;
 
     HWND hBtnPlus = CreateWindowW(
@@ -754,10 +848,20 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 }
 
                 case ID_BTN_SETTINGS:
-                case ID_BTN_OFFSET_MINUS:
-                case ID_BTN_OFFSET_PLUS:
                     // TODO: hook up functionality later
                     break;
+
+                case ID_BTN_OFFSET_MINUS:
+                case ID_BTN_OFFSET_PLUS:
+                {
+                    HWND hEdit = GetDlgItem(hwnd, ID_EDIT_OFFSET);
+                    if (hEdit)
+                    {
+                        float delta = (LOWORD(wParam) == ID_BTN_OFFSET_PLUS) ? 0.1f : -0.1f;
+                        ApplyOffset(hEdit, lyrics_display::get_offset() + delta);
+                    }
+                    break;
+                }
 
                 case ID_BTN_REFRESH:
                     auto_nudge(0.5);
