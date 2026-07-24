@@ -100,8 +100,21 @@ namespace timeline_tracker {
             g_last_lyrics_title = media.title;
             g_last_lyrics_artist = media.artist;
 
-            // Clear the previous song's lyrics right away.
+            // Clear the previous song's lyrics and reset offset right away.
             lyrics_display::set_lines({});
+            lyrics_display::reset_offset();
+
+            // Update the offset edit box to show the reset value.
+            if (g_hwnd)
+            {
+                HWND hEdit = GetDlgItem(g_hwnd, ID_EDIT_OFFSET);
+                if (hEdit)
+                {
+                    wchar_t buf[16];
+                    swprintf(buf, 16, L"%.1f", lyrics_display::get_offset());
+                    SetWindowTextW(hEdit, buf);
+                }
+            }
 
             string title = media.title;
             string artist = media.artist;

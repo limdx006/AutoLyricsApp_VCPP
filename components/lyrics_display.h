@@ -25,6 +25,7 @@ namespace lyrics_display {
     // Seconds added to the playback position before matching a line; positive = lyrics appear earlier.
     float get_offset();
     void set_offset(float offset_seconds);
+    void reset_offset();
 
     // Draws the currently visible lyric lines into the given area of hdc.
     void draw(HDC hdc, const RECT& area);
