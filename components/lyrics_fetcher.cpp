@@ -53,6 +53,14 @@ static vector<LyricLine> parse_lrc(const string& lrcText)
         if (!text.empty() && text.front() == ' ')
             text.erase(0, 1);
 
+        // Trim trailing whitespace/CR (e.g. from CRLF line endings) so a
+        // line that's only whitespace is correctly treated as blank below.
+        while (!text.empty() && (text.back() == ' ' || text.back() == '\r' || text.back() == '\t'))
+            text.pop_back();
+
+        if (text.empty())
+            continue; // blank line (instrumental break) -- skip instead of showing an empty highlighted line
+
         lines.push_back(LyricLine{ timestamp, utf8_to_wide(text) });
     }
 
