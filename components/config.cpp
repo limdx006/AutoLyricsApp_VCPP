@@ -63,10 +63,10 @@ const int FONT_SIZE_ICON_LARGE = 40;
 const int FONT_SIZE_LABEL      = 25;
 const int FONT_SIZE_TIME       = 14;
 const int FONT_SIZE_STATUS     = 14;
-const int FONT_SIZE_LANG       = 14;   // slightly smaller than artist (15)
+const int FONT_SIZE_LANG       = 14;   // slightly smaller than artist
 const int FONT_SIZE_LYRICS     = 20;   // far lines (2+ away from the highlighted line)
 const int FONT_SIZE_LYRICS_NEAR    = 24; // line immediately before/after the highlighted one
-const int FONT_SIZE_LYRICS_CURRENT = 30; // active (center) lyric line
+const int FONT_SIZE_LYRICS_CURRENT = 32; // active (center) lyric line
 const int LYRICS_LINE_SPACING      = 30;
 const UINT LYRICS_ANIM_DURATION_MS = 250;
 

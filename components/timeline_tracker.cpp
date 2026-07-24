@@ -2,8 +2,10 @@
 #include "media_session.h"
 #include "time_formatter.h"
 #include "gui.h"
+#include "lyrics_display.h"
 #include <algorithm>
 #include <chrono>
+#include <thread>
 
 namespace timeline_tracker {
     static HWND g_hwnd = nullptr;
@@ -17,6 +19,8 @@ namespace timeline_tracker {
     static bool g_has_window_position = false;
     static wstring g_current_title;
     static wstring g_current_artist;
+    static string g_last_lyrics_title;  // title/artist of the last song lyrics were fetched for
+    static string g_last_lyrics_artist;
 
     static void update_controls()
     {
@@ -33,13 +37,7 @@ namespace timeline_tracker {
         HWND hSongCtrl = GetDlgItem(g_hwnd, ID_STATIC_SONG);
         HWND hArtistCtrl = GetDlgItem(g_hwnd, ID_STATIC_ARTIST);
 
-        // SetWindowTextW already invalidates the control when the text
-        // actually changes, so a manual RedrawWindow isn't needed. Using
-        // RDW_UPDATENOW here previously forced an immediate synchronous
-        // repaint of each control on every 500ms tick (4 extra forced
-        // repaints on top of the full-window one), which added to the
-        // flashing. Skip the SetWindowTextW call entirely when the text
-        // hasn't changed, so most ticks touch nothing at all.
+        // Only touch the control (and repaint) if its text actually changed
         auto setIfChanged = [](HWND ctrl, const wstring& newText) -> bool
         {
             if (!ctrl) return false;
@@ -60,18 +58,11 @@ namespace timeline_tracker {
         bool titleChanged = setIfChanged(hSongCtrl, g_current_title);
         setIfChanged(hArtistCtrl, g_current_artist);
 
-        // New song -> re-measure and resize the header box for it, instead
-        // of leaving it sized for whatever the previous song needed.
+        // New song -> re-measure and resize the header box for it
         if (titleChanged)
             RefreshHeaderText(g_hwnd, g_current_title);
 
-        // Invalidate the main window so the progress bar (drawn in WM_PAINT,
-        // based on the tracked position) picks up the new value. Deliberately
-        // no RDW_UPDATENOW/UpdateWindow here: forcing an immediate synchronous
-        // repaint of the whole window on every 500ms tick was causing a visible
-        // erase-then-redraw flash. Letting it go through the normal message
-        // queue (combined with the double-buffered WM_PAINT in gui.cpp) fixes
-        // that while still keeping the bar visually in sync.
+        // Invalidate (not RDW_UPDATENOW) so the progress bar updates without forcing a synchronous repaint
         if (g_hwnd)
             InvalidateRect(g_hwnd, nullptr, FALSE);
     }
@@ -103,6 +94,32 @@ namespace timeline_tracker {
 
     static bool apply_media_state(const MediaSessionInfo& media)
     {
+        // Detect a song change by title/artist rather than position
+        if (!media.title.empty() && (media.title != g_last_lyrics_title || media.artist != g_last_lyrics_artist))
+        {
+            g_last_lyrics_title = media.title;
+            g_last_lyrics_artist = media.artist;
+
+            // Clear the previous song's lyrics right away.
+            lyrics_display::set_lines({});
+
+            string title = media.title;
+            string artist = media.artist;
+            std::thread([title, artist]() {
+                cout << "Fetching lyrics for: " << title << " - " << artist << "\n";
+                LyricsResult result = fetch_lyrics(title, artist);
+                if (result.success)
+                {
+                    cout << "Lyrics found (" << result.lines.size() << " lines)\n";
+                    SubmitLyrics(result.lines);
+                }
+                else
+                {
+                    cout << "No synced lyrics found.\n";
+                }
+            }).detach();
+        }
+
         const double window_position = (std::max)(0.0, static_cast<double>(media.position));
         const double window_duration = (std::max)(0.0, static_cast<double>(media.duration));
 
