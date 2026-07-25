@@ -2,29 +2,33 @@
 #include "media_session.h"
 #include "time_formatter.h"
 #include "gui.h"
+#include "lyrics_display.h"
 #include <algorithm>
 #include <chrono>
+#include <thread>
 
 namespace timeline_tracker {
     static HWND g_hwnd = nullptr;
     static HINSTANCE g_hInstance = nullptr;
-    static double g_current_position_seconds = 0.0;
-    static double g_duration_seconds = 0.0;
+    static float g_current_position_seconds = 0.0f;
+    static float g_duration_seconds = 0.0f;
     static bool g_is_playing = false;
     static bool g_has_valid_position = false;
     static ULONGLONG g_last_update_tick = 0;
-    static double g_last_window_position_seconds = -1.0;
+    static float g_last_window_position_seconds = -1.0f;
     static bool g_has_window_position = false;
     static wstring g_current_title;
     static wstring g_current_artist;
+    static string g_last_lyrics_title;  // title/artist of the last song lyrics were fetched for
+    static string g_last_lyrics_artist;
 
     static void update_controls()
     {
         if (g_hwnd == nullptr)
             return;
 
-        std::string currentTimeText = format_display_time(static_cast<float>(g_current_position_seconds));
-        std::string endTimeText = format_display_time(static_cast<float>(g_duration_seconds));
+        std::string currentTimeText = format_display_time(g_current_position_seconds);
+        std::string endTimeText = format_display_time(g_duration_seconds);
         CURRENT_TIME = std::wstring(currentTimeText.begin(), currentTimeText.end());
         END_TIME = std::wstring(endTimeText.begin(), endTimeText.end());
 
@@ -33,13 +37,7 @@ namespace timeline_tracker {
         HWND hSongCtrl = GetDlgItem(g_hwnd, ID_STATIC_SONG);
         HWND hArtistCtrl = GetDlgItem(g_hwnd, ID_STATIC_ARTIST);
 
-        // SetWindowTextW already invalidates the control when the text
-        // actually changes, so a manual RedrawWindow isn't needed. Using
-        // RDW_UPDATENOW here previously forced an immediate synchronous
-        // repaint of each control on every 500ms tick (4 extra forced
-        // repaints on top of the full-window one), which added to the
-        // flashing. Skip the SetWindowTextW call entirely when the text
-        // hasn't changed, so most ticks touch nothing at all.
+        // Only touch the control (and repaint) if its text actually changed
         auto setIfChanged = [](HWND ctrl, const wstring& newText) -> bool
         {
             if (!ctrl) return false;
@@ -60,18 +58,11 @@ namespace timeline_tracker {
         bool titleChanged = setIfChanged(hSongCtrl, g_current_title);
         setIfChanged(hArtistCtrl, g_current_artist);
 
-        // New song -> re-measure and resize the header box for it, instead
-        // of leaving it sized for whatever the previous song needed.
+        // New song -> re-measure and resize the header box for it
         if (titleChanged)
             RefreshHeaderText(g_hwnd, g_current_title);
 
-        // Invalidate the main window so the progress bar (drawn in WM_PAINT,
-        // based on the tracked position) picks up the new value. Deliberately
-        // no RDW_UPDATENOW/UpdateWindow here: forcing an immediate synchronous
-        // repaint of the whole window on every 500ms tick was causing a visible
-        // erase-then-redraw flash. Letting it go through the normal message
-        // queue (combined with the double-buffered WM_PAINT in gui.cpp) fixes
-        // that while still keeping the bar visually in sync.
+        // Invalidate (not RDW_UPDATENOW) so the progress bar updates without forcing a synchronous repaint
         if (g_hwnd)
             InvalidateRect(g_hwnd, nullptr, FALSE);
     }
@@ -103,13 +94,52 @@ namespace timeline_tracker {
 
     static bool apply_media_state(const MediaSessionInfo& media)
     {
-        const double window_position = (std::max)(0.0, static_cast<double>(media.position));
-        const double window_duration = (std::max)(0.0, static_cast<double>(media.duration));
-
-        if (g_has_window_position && g_last_window_position_seconds >= 0.0)
+        // Detect a song change by title/artist rather than position
+        if (!media.title.empty() && (media.title != g_last_lyrics_title || media.artist != g_last_lyrics_artist))
         {
-            const double position_delta = std::abs(window_position - g_last_window_position_seconds);
-            if (position_delta < 0.001)
+            g_last_lyrics_title = media.title;
+            g_last_lyrics_artist = media.artist;
+
+            // Clear the previous song's lyrics and reset offset right away.
+            lyrics_display::set_lines({});
+            lyrics_display::reset_offset();
+
+            // Update the offset edit box to show the reset value.
+            if (g_hwnd)
+            {
+                HWND hEdit = GetDlgItem(g_hwnd, ID_EDIT_OFFSET);
+                if (hEdit)
+                {
+                    wchar_t buf[16];
+                    swprintf(buf, 16, L"%.1f", lyrics_display::get_offset());
+                    SetWindowTextW(hEdit, buf);
+                }
+            }
+
+            string title = media.title;
+            string artist = media.artist;
+            std::thread([title, artist]() {
+                cout << "Fetching lyrics for: " << title << " - " << artist << "\n";
+                LyricsResult result = fetch_lyrics(title, artist);
+                if (result.success)
+                {
+                    cout << "Lyrics found (" << result.lines.size() << " lines)\n";
+                    SubmitLyrics(result.lines);
+                }
+                else
+                {
+                    cout << "No synced lyrics found.\n";
+                }
+            }).detach();
+        }
+
+        const float window_position = (std::max)(0.0f, media.position);
+        const float window_duration = (std::max)(0.0f, media.duration);
+
+        if (g_has_window_position && g_last_window_position_seconds >= 0.0f)
+        {
+            const float position_delta = std::abs(window_position - g_last_window_position_seconds);
+            if (position_delta < 0.001f)
             {
                 g_duration_seconds = window_duration;
                 g_is_playing = media.is_playing;
@@ -140,12 +170,12 @@ namespace timeline_tracker {
         updateTimelineDisplay();
     }
 
-    double get_current_position_seconds()
+    float get_current_position_seconds()
     {
         return g_current_position_seconds;
     }
 
-    double get_duration_seconds()
+    float get_duration_seconds()
     {
         return g_duration_seconds;
     }
@@ -180,14 +210,14 @@ namespace timeline_tracker {
             return;
 
         const ULONGLONG now = GetTickCount64();
-        const double elapsed_seconds = static_cast<double>(now - g_last_update_tick) / 1000.0;
-        if (elapsed_seconds <= 0.0)
+        const float elapsed_seconds = static_cast<float>(now - g_last_update_tick) / 1000.0f;
+        if (elapsed_seconds <= 0.0f)
             return;
 
         if (g_is_playing)
         {
             g_current_position_seconds += elapsed_seconds;
-            if (g_duration_seconds > 0.0)
+            if (g_duration_seconds > 0.0f)
                 g_current_position_seconds = (std::min)(g_current_position_seconds, g_duration_seconds);
         }
 

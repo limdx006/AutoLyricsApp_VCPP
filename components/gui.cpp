@@ -7,7 +7,16 @@
 
 #include "gui.h"
 #include "timeline_tracker.h"
+#include "lyrics_display.h"
 #include <algorithm>
+#include <atomic>
+#include <utility>
+#include <cmath>
+#include <cwctype>
+
+// Set once the main window exists; lets a background thread (the lyrics
+// fetch) safely hand results to the GUI thread via PostMessage.
+static std::atomic<HWND> g_mainHwnd{ nullptr };
 
 // Globals
 static HBRUSH g_hbrBackground = nullptr;
@@ -86,6 +95,93 @@ LRESULT CALLBACK IconHoverSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
     return DefSubclassProc(hwnd, msg, wParam, lParam);
 }
 
+// Rounds to 1 decimal, clamps to a sane range, stores it, and reformats the edit box text
+void ApplyOffset(HWND hEdit, float newOffset)
+{
+    newOffset = std::round(newOffset * 10.0f) / 10.0f;
+    newOffset = (std::max)(-9.9f, (std::min)(9.9f, newOffset));
+
+    lyrics_display::set_offset(newOffset);
+
+    wchar_t buf[16];
+    swprintf(buf, 16, L"%.1f", newOffset);
+    SetWindowTextW(hEdit, buf);
+}
+
+// Parses whatever the user typed and commits it via ApplyOffset (falls back to the current value if unparsable)
+void CommitOffsetEdit(HWND hEdit)
+{
+    int len = GetWindowTextLengthW(hEdit);
+    wstring text(len, L'\0');
+    if (len > 0)
+        GetWindowTextW(hEdit, &text[0], len + 1);
+
+    float newOffset = lyrics_display::get_offset();
+    if (!text.empty() && text != L"-")
+    {
+        try { newOffset = std::wcstof(text.c_str(), nullptr); }
+        catch (...) {}
+    }
+
+    ApplyOffset(hEdit, newOffset);
+}
+
+// Restricts typed input to: optional leading '-', digits, optional '.', at most one digit after it
+LRESULT CALLBACK OffsetEditSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam,
+                                         UINT_PTR uIdSubclass, DWORD_PTR)
+{
+    if (msg == WM_CHAR && wParam >= 0x20) // let control chars (backspace, etc.) through untouched
+    {
+        int len = GetWindowTextLengthW(hwnd);
+        wstring text(len, L'\0');
+        if (len > 0)
+            GetWindowTextW(hwnd, &text[0], len + 1);
+
+        DWORD selStart = 0, selEnd = 0;
+        SendMessageW(hwnd, EM_GETSEL, (WPARAM)&selStart, (LPARAM)&selEnd);
+        wstring candidate = text.substr(0, selStart) + (wchar_t)wParam + text.substr(selEnd);
+
+        bool valid = (candidate == L"-");
+        size_t i = 0;
+        if (!valid)
+        {
+            if (i < candidate.size() && candidate[i] == L'-') i++;
+            while (i < candidate.size() && iswdigit(candidate[i])) i++;
+            if (i < candidate.size() && candidate[i] == L'.')
+            {
+                i++;
+                size_t digitsAfterDot = 0;
+                while (i < candidate.size() && iswdigit(candidate[i])) { i++; digitsAfterDot++; }
+                valid = (digitsAfterDot <= 1);
+            }
+            else
+            {
+                valid = true;
+            }
+            if (i != candidate.size())
+                valid = false; // leftover characters that didn't match the pattern above
+        }
+
+        if (!valid)
+            return 0; // swallow the character
+    }
+    else if (msg == WM_KEYDOWN && wParam == VK_RETURN)
+    {
+        CommitOffsetEdit(hwnd);
+        return 0;
+    }
+    else if (msg == WM_KILLFOCUS)
+    {
+        CommitOffsetEdit(hwnd);
+    }
+    else if (msg == WM_NCDESTROY)
+    {
+        RemoveWindowSubclass(hwnd, OffsetEditSubclassProc, uIdSubclass);
+    }
+
+    return DefSubclassProc(hwnd, msg, wParam, lParam);
+}
+
 int RunGui(HINSTANCE hInstance, int nCmdShow)
 {
     const wchar_t CLASS_NAME[] = L"AutoLyricsWindowClass";
@@ -130,6 +226,8 @@ int RunGui(HINSTANCE hInstance, int nCmdShow)
 
     if (!hwnd)
         return 0;
+
+    g_mainHwnd.store(hwnd);
 
     // Re-set the title; some Windows 11 builds don't pick it up from CreateWindowExW alone
     SetWindowTextW(hwnd, L"AutoLyrics");
@@ -292,12 +390,17 @@ void CreateHeaderControls(HWND parent, HINSTANCE hInstance)
     SendMessageW(hBtnMinus, WM_SETFONT, (WPARAM)g_hFontLabel, TRUE);
     cx += OFFSET_BTN_SIZE + OFFSET_GAP_MINUS_TO_EDIT;
 
+    wchar_t offsetBuf[16];
+    swprintf(offsetBuf, 16, L"%.1f", lyrics_display::get_offset());
+
     HWND hEditOffset = CreateWindowW(
-        L"EDIT", OFFSET_VALUE,
-        WS_CHILD | WS_VISIBLE | WS_BORDER | ES_CENTER | ES_READONLY,
+        L"EDIT", offsetBuf,
+        WS_CHILD | WS_VISIBLE | WS_BORDER | ES_CENTER,
         cx, rowCenterY - OFFSET_EDIT_HEIGHT / 2, OFFSET_EDIT_WIDTH, OFFSET_EDIT_HEIGHT,
         parent, (HMENU)ID_EDIT_OFFSET, hInstance, nullptr);
     SendMessageW(hEditOffset, WM_SETFONT, (WPARAM)g_hFontLabel, TRUE);
+    SendMessageW(hEditOffset, EM_LIMITTEXT, 6, 0); // e.g. "-12.3"
+    SetWindowSubclass(hEditOffset, OffsetEditSubclassProc, 1, 0);
     cx += OFFSET_EDIT_WIDTH + OFFSET_GAP_EDIT_TO_PLUS;
 
     HWND hBtnPlus = CreateWindowW(
@@ -488,6 +591,23 @@ void HandlePlaybackAction(HWND hwnd, int controlId)
     }
 }
 
+void SubmitLyrics(vector<LyricLine> lines)
+{
+    HWND hwnd = g_mainHwnd.load();
+    // The background fetch normally finishes well after the window is
+    // created, but wait briefly just in case it races window creation.
+    for (int i = 0; i < 200 && !hwnd; ++i)
+    {
+        Sleep(10);
+        hwnd = g_mainHwnd.load();
+    }
+    if (!hwnd)
+        return;
+
+    auto* linesPtr = new vector<LyricLine>(std::move(lines));
+    PostMessageW(hwnd, WM_APP_LYRICS_READY, 0, (LPARAM)linesPtr);
+}
+
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
     switch (msg)
@@ -496,6 +616,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         {
             HINSTANCE hInstance = ((LPCREATESTRUCTW)lParam)->hInstance;
             timeline_tracker::initialize(hwnd, hInstance);
+            lyrics_display::initialize(hwnd);
             CreateHeaderControls(hwnd, hInstance);
             CreateLanguageBarControls(hwnd, hInstance);
             CreateLyricsAreaControls(hwnd, hInstance);
@@ -547,17 +668,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             SelectObject(hdc, oldBrush);
             SelectObject(hdc, oldPen);
 
-            // --- Lyrics area placeholder: dim dotted outline, remove once real controls are added ---
-            HPEN hpenOutline = CreatePen(PS_DOT, 1, RGB(0x30, 0x30, 0x45));
-            oldPen = (HPEN)SelectObject(hdc, hpenOutline);
-            oldBrush = (HBRUSH)SelectObject(hdc, (HBRUSH)GetStockObject(NULL_BRUSH));
-            RoundRect(hdc,
-                CARD_LEFT + 2, LYRICS_AREA_TOP,
-                CARD_LEFT + CARD_WIDTH - 2, LYRICS_AREA_TOP + LYRICS_AREA_HEIGHT,
-                CARD_RADIUS, CARD_RADIUS);
-            SelectObject(hdc, oldPen);
-            SelectObject(hdc, oldBrush);
-            DeleteObject(hpenOutline);
+            // --- Lyrics display ---
+            RECT lyricsRect = {
+                CARD_LEFT, LYRICS_AREA_TOP,
+                CARD_LEFT + CARD_WIDTH, LYRICS_AREA_TOP + LYRICS_AREA_HEIGHT
+            };
+            lyrics_display::draw(hdc, lyricsRect);
 
             // --- Bottom card (blends with main window background) ---
             oldBrush = (HBRUSH)SelectObject(hdc, g_hbrBackground);
@@ -578,14 +694,14 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             int barBottom = barTop + PROGRESS_BAR_HEIGHT;
             int barWidth  = barRight - barLeft;
 
-            double duration = timeline_tracker::get_duration_seconds();
-            double position = timeline_tracker::get_current_position_seconds();
+            float duration = timeline_tracker::get_duration_seconds();
+            float position = timeline_tracker::get_current_position_seconds();
             int fillWidth = 0;
-            if (duration > 0.0)
+            if (duration > 0.0f)
             {
-                double ratio = position / duration;
-                if (ratio < 0.0) ratio = 0.0;
-                if (ratio > 1.0) ratio = 1.0;
+                float ratio = position / duration;
+                if (ratio < 0.0f) ratio = 0.0f;
+                if (ratio > 1.0f) ratio = 1.0f;
                 fillWidth = static_cast<int>(barWidth * ratio);
             }
             else
@@ -694,6 +810,22 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             if (wParam == timeline_tracker::TIMER_ID_TIMELINE_UPDATE)
             {
                 timeline_tracker::handle_timer();
+                lyrics_display::sync(timeline_tracker::get_current_position_seconds());
+            }
+            else if (wParam == lyrics_display::TIMER_ID_LYRICS_ANIM)
+            {
+                lyrics_display::handle_anim_timer();
+            }
+            return 0;
+        }
+
+        case WM_APP_LYRICS_READY:
+        {
+            auto* linesPtr = reinterpret_cast<vector<LyricLine>*>(lParam);
+            if (linesPtr)
+            {
+                lyrics_display::set_lines(std::move(*linesPtr));
+                delete linesPtr;
             }
             return 0;
         }
@@ -716,10 +848,20 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 }
 
                 case ID_BTN_SETTINGS:
-                case ID_BTN_OFFSET_MINUS:
-                case ID_BTN_OFFSET_PLUS:
                     // TODO: hook up functionality later
                     break;
+
+                case ID_BTN_OFFSET_MINUS:
+                case ID_BTN_OFFSET_PLUS:
+                {
+                    HWND hEdit = GetDlgItem(hwnd, ID_EDIT_OFFSET);
+                    if (hEdit)
+                    {
+                        float delta = (LOWORD(wParam) == ID_BTN_OFFSET_PLUS) ? 0.1f : -0.1f;
+                        ApplyOffset(hEdit, lyrics_display::get_offset() + delta);
+                    }
+                    break;
+                }
 
                 case ID_BTN_REFRESH:
                     auto_nudge(0.5);
@@ -736,6 +878,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
         case WM_DESTROY:
             timeline_tracker::cleanup();
+            lyrics_display::cleanup();
+            g_mainHwnd.store(nullptr);
             if (g_hbrBackground)  { DeleteObject(g_hbrBackground);  g_hbrBackground = nullptr; }
             if (g_hbrCard)        { DeleteObject(g_hbrCard);        g_hbrCard = nullptr; }
             if (g_hbrEditBg)      { DeleteObject(g_hbrEditBg);      g_hbrEditBg = nullptr; }

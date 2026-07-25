@@ -4,3 +4,5 @@ note.txt
 /vcpkg
 *.obj
 *.exe
+/.qwen
+QWEN.md

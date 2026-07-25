@@ -107,7 +107,11 @@ extern const int FONT_SIZE_LABEL;
 extern const int FONT_SIZE_TIME;
 extern const int FONT_SIZE_STATUS;
 extern const int FONT_SIZE_LANG;    // language bar (slightly smaller than artist)
-extern const int FONT_SIZE_LYRICS;  // lyrics text (placeholder for future)
+extern const int FONT_SIZE_LYRICS;  // far lines (2+ away from the highlighted line)
+extern const int FONT_SIZE_LYRICS_NEAR;    // line immediately before/after the highlighted one
+extern const int FONT_SIZE_LYRICS_CURRENT; // active (center) lyric line -- bigger + bold
+extern const int LYRICS_LINE_SPACING;      // vertical distance between stacked lyric lines
+extern const UINT LYRICS_ANIM_DURATION_MS; // how long the slide-to-next-line animation takes
 extern const wchar_t* const FONT_FACE_UI;
 extern const wchar_t* const FONT_FACE_SYMBOL;
 
@@ -118,6 +122,8 @@ extern const COLORREF APP_COLOR_EDIT_BG;      // offset value box bg
 extern const COLORREF APP_COLOR_SONG_TEXT;    // song name accent color
 extern const COLORREF APP_COLOR_ARTIST_TEXT;  // artist name color
 extern const COLORREF APP_COLOR_LIGHT_TEXT;   // icon labels / offset label color
+extern const COLORREF APP_COLOR_LYRICS_NEAR;  // lyric line immediately before/after the highlighted one
+extern const COLORREF APP_COLOR_LYRICS_FAR;   // lyric lines two or more away from the highlighted one
 extern const COLORREF APP_COLOR_EDIT_TEXT;    // offset value text color
 extern const COLORREF APP_COLOR_ICON_HOVER;   // PTT/Refresh/Settings hover color
 extern const COLORREF APP_COLOR_PROGRESS_BAR; // progress bar fill color
@@ -125,7 +131,6 @@ extern const COLORREF APP_COLOR_PROGRESS_BAR; // progress bar fill color
 // Hardcoded display text (temporary, until real song data is wired up)
 extern const wchar_t* const SONG_NAME;
 extern const wchar_t* const ARTIST_NAME;
-extern const wchar_t* const OFFSET_VALUE;
 extern std::wstring CURRENT_TIME;
 extern std::wstring END_TIME;
 extern const wchar_t* const STATUS_TEXT;
