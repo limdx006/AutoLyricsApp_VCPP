@@ -3,6 +3,8 @@
 
 void auto_nudge(float sleep_delay)
 {
+    int attempts = 0;
+
     using playback_controls::PlaybackAction;
 
     const bool was_playing = playback_controls::is_playing();
@@ -12,11 +14,18 @@ void auto_nudge(float sleep_delay)
     // If already paused, do nothing — otherwise we'd resume playback.
     if (!was_playing)
         return;
+    
+    cout << "Attempt auto nudge" << "\n";
+    do {
+        playback_controls::send_action(PlaybackAction::PlayPause);
 
-    playback_controls::send_action(PlaybackAction::PlayPause);
+        if (sleep_delay > 0.0)
+            Sleep(static_cast<DWORD>(sleep_delay * 1000.0));
 
-    if (sleep_delay > 0.0)
-        Sleep(static_cast<DWORD>(sleep_delay * 1000.0));
+        playback_controls::send_action(PlaybackAction::PlayPause);
+        Sleep(1000);
+        attempts++;
 
-    playback_controls::send_action(PlaybackAction::PlayPause);
+    } while(!was_playing);
+    cout << "Auto nudge success in: " << attempts << "\n";
 }
