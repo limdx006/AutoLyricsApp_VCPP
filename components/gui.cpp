@@ -622,6 +622,16 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             CreateLanguageBarControls(hwnd, hInstance);
             CreateLyricsAreaControls(hwnd, hInstance);
             CreateBottomControls(hwnd, hInstance);
+
+            // Sync the play/pause button with the actual media state.
+            // CreateBottomControls defaults to "Playing", which is wrong
+            // when media is paused at startup.
+            if (!playback_controls::is_playing())
+            {
+                g_isPlaying = false;
+                UpdatePlayPauseButton(hwnd);
+            }
+
             return 0;
         }
 

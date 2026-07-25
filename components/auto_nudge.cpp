@@ -8,17 +8,15 @@ void auto_nudge(float sleep_delay)
     const bool was_playing = playback_controls::is_playing();
 
 
-    if (was_playing)
-    {
-        playback_controls::send_action(PlaybackAction::PlayPause);
+    // Only nudge (brief pause/resume) when media is actively playing.
+    // If already paused, do nothing — otherwise we'd resume playback.
+    if (!was_playing)
+        return;
 
-        if (sleep_delay > 0.0)
-            Sleep(static_cast<DWORD>(sleep_delay * 1000.0));
+    playback_controls::send_action(PlaybackAction::PlayPause);
 
-        playback_controls::send_action(PlaybackAction::PlayPause);
-    }
-    else
-    {
-        playback_controls::send_action(PlaybackAction::PlayPause);
-    }
+    if (sleep_delay > 0.0)
+        Sleep(static_cast<DWORD>(sleep_delay * 1000.0));
+
+    playback_controls::send_action(PlaybackAction::PlayPause);
 }
