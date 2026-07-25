@@ -187,6 +187,74 @@ namespace lyrics_display {
         };
         int normalLineHeight = lineHeightFor(g_hFontNormal);
 
+        // Breadth-first word-wrap helper: inserts \r\n so the text fits within textWidth
+        // when drawn with the current font in the HDC. Caller must select the reference font first.
+        auto word_wrap = [&](const wstring& text) -> wstring
+        {
+            if (text.empty())
+                return text;
+
+            vector<wstring> words;
+            size_t s = 0, e;
+            while ((e = text.find(L' ', s)) != wstring::npos)
+            {
+                if (e > s)
+                    words.push_back(text.substr(s, e - s));
+                s = e + 1;
+            }
+            if (s < text.size())
+                words.push_back(text.substr(s));
+
+            if (words.empty())
+                return text;
+
+            wstring result;
+            wstring currentLine = words[0];
+
+            for (size_t i = 1; i < words.size(); ++i)
+            {
+                wstring testLine = currentLine + L" " + words[i];
+                SIZE sz;
+                GetTextExtentPoint32W(hdc, testLine.c_str(), (int)testLine.size(), &sz);
+
+                if (sz.cx > textWidth)
+                {
+                    if (!result.empty())
+                        result += L"\r\n";
+                    result += currentLine;
+                    currentLine = words[i];
+                }
+                else
+                {
+                    currentLine = testLine;
+                }
+            }
+
+            if (!result.empty())
+                result += L"\r\n";
+            result += currentLine;
+            return result;
+        };
+
+        // How many extra lines fit above/below the center within the area,
+        // using the plain single-line spacing as the yardstick.
+        int areaHeight = area.bottom - area.top;
+        float otherStep = normalLineHeight + LINE_MARGIN;
+        int maxExtra = (int)(areaHeight / 2.0f / otherStep); // per side, rough fit
+        if (maxExtra < 1) maxExtra = 1;
+        int linesAbove = maxExtra;
+        int linesBelow = maxExtra;
+
+        // Pre-wrap all visible lines using the current-line font so wrapping is consistent
+        // at every position (far, near, centre) rather than changing as the line scrolls.
+        int minIndex = (std::max)(0, g_currentIndex - linesAbove - 1);
+        int maxIndex = (std::min)((int)g_lines.size() - 1, g_currentIndex + linesBelow + 1);
+        HFONT oldWrapFont = (HFONT)SelectObject(hdc, g_hFontCurrent);
+        vector<wstring> wrappedText(g_lines.size());
+        for (int i = minIndex; i <= maxIndex; ++i)
+            wrappedText[i] = word_wrap(g_lines[i].text);
+        SelectObject(hdc, oldWrapFont);
+
         // Real (possibly wrapped) height of a specific slot's line, measured fresh each frame
         auto heightForSlot = [&](int slot) -> int
         {
@@ -194,9 +262,9 @@ namespace lyrics_display {
             if (idx < 0 || idx >= (int)g_lines.size())
                 return normalLineHeight;
             if (slot == 0)
-                return measureHeight(g_lines[idx].text, g_hFontCurrent);
+                return measureHeight(wrappedText[idx], g_hFontCurrent);
             if (std::abs(slot) == 1)
-                return measureHeight(g_lines[idx].text, g_hFontNear);
+                return measureHeight(wrappedText[idx], g_hFontNear);
             return normalLineHeight;
         };
 
@@ -218,15 +286,6 @@ namespace lyrics_display {
             return dir * y;
         };
 
-        // How many extra lines fit above/below the center within the area,
-        // using the plain single-line spacing as the yardstick.
-        int areaHeight = area.bottom - area.top;
-        float otherStep = normalLineHeight + LINE_MARGIN;
-        int maxExtra = (int)(areaHeight / 2.0f / otherStep); // per side, rough fit
-        if (maxExtra < 1) maxExtra = 1;
-        int linesAbove = maxExtra;
-        int linesBelow = maxExtra;
-
         // 0 = just started sliding, 1 = settled on the new current line. Ease-out cubic for a smooth finish.
         float t = 1.0f;
         if (g_animating)
@@ -242,9 +301,6 @@ namespace lyrics_display {
         int hadClip = GetClipRgn(hdc, oldClip);
         IntersectClipRect(hdc, area.left, area.top, area.right, area.bottom);
         int oldBkMode = SetBkMode(hdc, TRANSPARENT);
-
-        int minIndex = (std::max)(0, g_currentIndex - linesAbove - 1);
-        int maxIndex = (std::min)((int)g_lines.size() - 1, g_currentIndex + linesBelow + 1);
 
         // Maps a signed slot offset to font size and weight with smooth interpolation.
         auto fontParamsForOffset = [](float absOffset, int& outSize, int& outWeight)
@@ -306,13 +362,13 @@ namespace lyrics_display {
             float y1 = slotOffsetY(highSlot);
             float yOffset = y0 + (y1 - y0) * frac;
 
-            int blockHeight = measureHeight(g_lines[i].text, font);
+            int blockHeight = measureHeight(wrappedText[i], font);
             int y = centerY + (int)std::lround(yOffset);
             RECT lineRect = { textLeft, y - blockHeight / 2 - 2, textRight, y + blockHeight / 2 + 2 };
 
             HFONT oldFont = (HFONT)SelectObject(hdc, font);
             SetTextColor(hdc, color);
-            DrawTextW(hdc, g_lines[i].text.c_str(), -1, &lineRect,
+            DrawTextW(hdc, wrappedText[i].c_str(), -1, &lineRect,
                 DT_CENTER | DT_WORDBREAK | DT_NOPREFIX);
             SelectObject(hdc, oldFont);
             DeleteObject(font);
