@@ -8,6 +8,7 @@
 #include "gui.h"
 #include "timeline_tracker.h"
 #include "lyrics_display.h"
+#include "language_detector.h"
 #include <algorithm>
 #include <atomic>
 #include <utility>
@@ -824,6 +825,17 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             auto* linesPtr = reinterpret_cast<vector<LyricLine>*>(lParam);
             if (linesPtr)
             {
+                // Detect language from lyric text before moving the data.
+                vector<wstring> texts;
+                texts.reserve(linesPtr->size());
+                for (const auto& line : *linesPtr)
+                    texts.push_back(line.text);
+
+                Language lang = detect_language(texts);
+                HWND hLangValue = GetDlgItem(hwnd, ID_STATIC_LANG_VALUE);
+                if (hLangValue)
+                    SetWindowTextW(hLangValue, language_to_wstring(lang));
+
                 lyrics_display::set_lines(std::move(*linesPtr));
                 delete linesPtr;
             }

@@ -93,7 +93,7 @@ const wchar_t* const STATUS_TEXT  = L"Playing";
 
 // Language bar hardcoded text
 const wchar_t* const LANG_LABEL_TEXT    = L"Language:";
-const wchar_t* const LANG_VALUE_TEXT    = L"Chinese";
+const wchar_t* const LANG_VALUE_TEXT    = L"Auto";
 const wchar_t* const CURRENT_LABEL_TEXT = L"Current:";
 const wchar_t* const CURRENT_VALUE_TEXT = L"PinYin";
 const wchar_t* const MODE_LABEL_TEXT    = L"[  Original  ]";
