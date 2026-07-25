@@ -102,6 +102,7 @@ namespace timeline_tracker {
 
             // Clear the previous song's lyrics and reset offset right away.
             lyrics_display::set_lines({});
+            lyrics_display::set_status(DisplayStatus::Searching);
             lyrics_display::reset_offset();
 
             // Update the offset edit box to show the reset value.
@@ -118,7 +119,8 @@ namespace timeline_tracker {
 
             string title = media.title;
             string artist = media.artist;
-            std::thread([title, artist]() {
+            HWND hwnd = g_hwnd;
+            std::thread([title, artist, hwnd]() {
                 cout << "Fetching lyrics for: " << title << " - " << artist << "\n";
                 LyricsResult result = fetch_lyrics(title, artist);
                 if (result.success)
@@ -129,6 +131,8 @@ namespace timeline_tracker {
                 else
                 {
                     cout << "No synced lyrics found.\n";
+                    if (hwnd)
+                        PostMessageW(hwnd, WM_APP_LYRICS_STATUS, (WPARAM)DisplayStatus::NoLyrics, 0);
                 }
             }).detach();
         }
@@ -164,7 +168,13 @@ namespace timeline_tracker {
     {
         MediaSessionInfo media = get_media_session_info();
         if (!media.is_success)
+        {
+            lyrics_display::set_status(DisplayStatus::NoMedia);
             return;
+        }
+
+        // Clear the no-media banner now that a session exists.
+        lyrics_display::set_status(DisplayStatus::None);
 
         apply_media_state(media);
         updateTimelineDisplay();

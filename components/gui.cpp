@@ -820,6 +820,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             return 0;
         }
 
+        case WM_APP_LYRICS_STATUS:
+        {
+            DisplayStatus status = static_cast<DisplayStatus>(wParam);
+            lyrics_display::set_status(status);
+            return 0;
+        }
+
         case WM_APP_LYRICS_READY:
         {
             auto* linesPtr = reinterpret_cast<vector<LyricLine>*>(lParam);

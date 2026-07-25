@@ -14,6 +14,7 @@ namespace lyrics_display {
     static HFONT g_hFontCurrent = nullptr;
     constexpr float DEFAULT_OFFSET = 0.8f; // positive = lyrics shown that many seconds earlier
     static float g_offsetSeconds = DEFAULT_OFFSET;
+    static DisplayStatus g_status = DisplayStatus::NoMedia;
 
     static void ensure_fonts()
     {
@@ -58,6 +59,9 @@ namespace lyrics_display {
 
     void set_lines(vector<LyricLine> lines)
     {
+        if (!lines.empty())
+            g_status = DisplayStatus::None;
+
         g_lines = std::move(lines);
         g_currentIndex = -1;
         g_animating = false;
@@ -67,6 +71,13 @@ namespace lyrics_display {
             KillTimer(g_hwnd, TIMER_ID_LYRICS_ANIM);
             InvalidateRect(g_hwnd, nullptr, FALSE);
         }
+    }
+
+    void set_status(DisplayStatus status)
+    {
+        g_status = status;
+        if (g_hwnd)
+            InvalidateRect(g_hwnd, nullptr, FALSE);
     }
 
     // Last line whose timestamp <= position_seconds, or -1 if before the first line.
@@ -156,13 +167,45 @@ namespace lyrics_display {
 
     void draw(HDC hdc, const RECT& area)
     {
-        if (g_lines.empty())
-            return;
-
         const int horizontalMargin = 20; // pixels of padding left/right
         int textLeft  = area.left + horizontalMargin;
         int textRight = area.right - horizontalMargin;
         int textWidth = textRight - textLeft;
+
+        // When no lines are loaded, show a status message instead.
+        if (g_lines.empty())
+        {
+            if (g_status == DisplayStatus::None)
+                return;
+
+            const wchar_t* text = L"";
+            COLORREF color;
+            switch (g_status)
+            {
+                case DisplayStatus::Searching:
+                    text = L"Searching lyrics......";
+                    color = RGB(0x4a, 0xcc, 0x6a); // green
+                    break;
+                case DisplayStatus::NoLyrics:
+                    text = L"No lyrics was found maybe try another song";
+                    color = RGB(0xe0, 0x5a, 0x5a); // red
+                    break;
+                case DisplayStatus::NoMedia:
+                    text = L"No detected media";
+                    color = RGB(0x4a, 0xcc, 0x6a); // green
+                    break;
+                default: return;
+            }
+
+            HFONT oldFont = (HFONT)SelectObject(hdc, g_hFontCurrent);
+            SetTextColor(hdc, color);
+            SetBkMode(hdc, TRANSPARENT);
+
+            RECT textRect = { textLeft, area.top, textRight, area.bottom };
+            DrawTextW(hdc, text, -1, &textRect, DT_CENTER | DT_VCENTER | DT_WORDBREAK | DT_NOPREFIX);
+            SelectObject(hdc, oldFont);
+            return;
+        }
 
         // Fixed vertical gap kept between adjacent lyric line blocks
         const int LINE_MARGIN = 24;
@@ -309,16 +352,13 @@ namespace lyrics_display {
             if (absOffset <= 1.0f)
             {
                 float t = static_cast<float>(absOffset);
-                size = std::lerp(static_cast<float>(FONT_SIZE_LYRICS_CURRENT),
-                                 static_cast<float>(FONT_SIZE_LYRICS_NEAR), t);
-                weight = std::lerp(static_cast<float>(FW_BOLD),
-                                   static_cast<float>(FW_NORMAL), t);
+                size = static_cast<float>(FONT_SIZE_LYRICS_CURRENT) + t * (FONT_SIZE_LYRICS_NEAR - FONT_SIZE_LYRICS_CURRENT);
+                weight = static_cast<float>(FW_BOLD) + t * (FW_NORMAL - FW_BOLD);
             }
             else if (absOffset <= 2.0f)
             {
                 float t = static_cast<float>(absOffset - 1.0f);
-                size = std::lerp(static_cast<float>(FONT_SIZE_LYRICS_NEAR),
-                                 static_cast<float>(FONT_SIZE_LYRICS), t);
+                size = static_cast<float>(FONT_SIZE_LYRICS_NEAR) + t * (FONT_SIZE_LYRICS - FONT_SIZE_LYRICS_NEAR);
                 weight = static_cast<float>(FW_NORMAL);
             }
             else

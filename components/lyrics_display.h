@@ -2,9 +2,15 @@
 #include "common.h"
 #include "lyrics_fetcher.h"
 
-// Tracks which lyric line is "current" for the given playback position,
-// animates the slide to the next line, and draws the visible window of
-// lines (current line bold/larger, neighbors dimmer/smaller).
+// Status messages shown in the lyrics area when no lines are available.
+enum class DisplayStatus {
+    None,       // normal lyrics display
+    Searching,  // "Searching lyrics......"
+    NoLyrics,   // "No lyrics was found maybe try another song"
+    NoMedia     // "No detected media"
+};
+
+// Tracks which lyric line is "current" for the given playback position
 namespace lyrics_display {
     constexpr UINT_PTR TIMER_ID_LYRICS_ANIM = 2;
 
@@ -12,7 +18,12 @@ namespace lyrics_display {
     void cleanup();
 
     // Replaces the loaded lyrics (e.g. once the background fetch completes).
+    // If lines is non-empty, resets the display status to None.
     void set_lines(vector<LyricLine> lines);
+
+    // Show a status message in the lyrics area (displayed only when no lines
+    // are available). Pass DisplayStatus::None to clear it.
+    void set_status(DisplayStatus status);
 
     // Call on every timeline position update (e.g. from the existing 500ms
     // timer) to re-check which line should be current and, if it advanced

@@ -10,6 +10,10 @@
 // lParam is a heap-allocated vector<LyricLine>* (see SubmitLyrics/WindowProc).
 #define WM_APP_LYRICS_READY (WM_APP + 1)
 
+// Posted from the background fetch thread when lyrics are not found;
+// wParam is a DisplayStatus value cast to WPARAM.
+#define WM_APP_LYRICS_STATUS (WM_APP + 2)
+
 int RunGui(HINSTANCE hInstance, int nCmdShow);
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 void CreateHeaderControls(HWND parent, HINSTANCE hInstance);

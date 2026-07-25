@@ -7,6 +7,7 @@ void auto_nudge(float sleep_delay)
 
     const bool was_playing = playback_controls::is_playing();
 
+
     if (was_playing)
     {
         playback_controls::send_action(PlaybackAction::PlayPause);
