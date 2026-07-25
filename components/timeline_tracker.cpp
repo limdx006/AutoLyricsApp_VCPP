@@ -104,6 +104,7 @@ namespace timeline_tracker {
             lyrics_display::set_lines({});
             lyrics_display::set_status(DisplayStatus::Searching);
             lyrics_display::reset_offset();
+            ResetModeToOriginal(g_hwnd);
 
             // Update the offset edit box to show the reset value.
             if (g_hwnd)

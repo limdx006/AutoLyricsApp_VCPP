@@ -47,6 +47,9 @@ static bool g_hoverNext     = false;
 // true = playing (shows pause button), false = paused (shows play button)
 static bool g_isPlaying = true;
 
+// false = Translated mode is highlighted, true = Original mode is highlighted
+static bool g_modeIsOriginal = true;
+
 static void UpdatePlayPauseButton(HWND hwnd)
 {
     HWND hBtn = GetDlgItem(hwnd, ID_BTN_PLAY_PAUSE);
@@ -463,14 +466,14 @@ void CreateLanguageBarControls(HWND parent, HINSTANCE hInstance)
     int col3X = CARD_LEFT + (colWidth * 2);
     HWND hModeLabel = CreateWindowW(
         L"STATIC", MODE_LABEL_TEXT,
-        WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOPREFIX,
+        WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY | SS_NOPREFIX,
         col3X, row1Y, colWidth, textHeight,
         parent, (HMENU)ID_STATIC_MODE_LABEL, hInstance, nullptr);
     SendMessageW(hModeLabel, WM_SETFONT, (WPARAM)g_hFontLang, TRUE);
 
     HWND hModeValue = CreateWindowW(
         L"STATIC", MODE_VALUE_TEXT,
-        WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOPREFIX,
+        WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY | SS_NOPREFIX,
         col3X, row2Y, colWidth, textHeight,
         parent, (HMENU)ID_STATIC_MODE_VALUE, hInstance, nullptr);
     SendMessageW(hModeValue, WM_SETFONT, (WPARAM)g_hFontLang, TRUE);
@@ -567,6 +570,26 @@ void TogglePlayPause(HWND hwnd)
 {
     g_isPlaying = !g_isPlaying;
     UpdatePlayPauseButton(hwnd);
+}
+
+void ToggleMode(HWND hwnd)
+{
+    g_modeIsOriginal = !g_modeIsOriginal;
+    // Repaint both mode static controls so WM_CTLCOLORSTATIC picks up the change.
+    HWND hLabel = GetDlgItem(hwnd, ID_STATIC_MODE_LABEL);
+    HWND hValue = GetDlgItem(hwnd, ID_STATIC_MODE_VALUE);
+    if (hLabel) InvalidateRect(hLabel, nullptr, TRUE);
+    if (hValue) InvalidateRect(hValue, nullptr, TRUE);
+}
+
+void ResetModeToOriginal(HWND hwnd)
+{
+    g_modeIsOriginal = true;
+    // Repaint both mode controls so WM_CTLCOLORSTATIC picks up the reset.
+    HWND hLabel = GetDlgItem(hwnd, ID_STATIC_MODE_LABEL);
+    HWND hValue = GetDlgItem(hwnd, ID_STATIC_MODE_VALUE);
+    if (hLabel) InvalidateRect(hLabel, nullptr, TRUE);
+    if (hValue) InvalidateRect(hValue, nullptr, TRUE);
 }
 
 void HandlePlaybackAction(HWND hwnd, int controlId)
@@ -777,14 +800,17 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             else if (ctrlId == ID_BTN_PREV || ctrlId == ID_BTN_PLAY_PAUSE || ctrlId == ID_BTN_NEXT)
                 SetTextColor(hdcStatic, APP_COLOR_LIGHT_TEXT);
             // Language bar: labels use light text, values use artist (grey) text
+            // Mode controls toggle between highlighted and dim based on selection.
             else if (ctrlId == ID_STATIC_LANG_LABEL ||
-                     ctrlId == ID_STATIC_CURRENT_LABEL ||
-                     ctrlId == ID_STATIC_MODE_LABEL)
+                     ctrlId == ID_STATIC_CURRENT_LABEL)
                 SetTextColor(hdcStatic, APP_COLOR_LIGHT_TEXT);
             else if (ctrlId == ID_STATIC_LANG_VALUE ||
-                     ctrlId == ID_STATIC_CURRENT_VALUE ||
-                     ctrlId == ID_STATIC_MODE_VALUE)
+                     ctrlId == ID_STATIC_CURRENT_VALUE)
                 SetTextColor(hdcStatic, APP_COLOR_ARTIST_TEXT);
+            else if (ctrlId == ID_STATIC_MODE_LABEL)
+                SetTextColor(hdcStatic, g_modeIsOriginal ? RGB(0xff, 0x8c, 0x00) : APP_COLOR_ARTIST_TEXT);
+            else if (ctrlId == ID_STATIC_MODE_VALUE)
+                SetTextColor(hdcStatic, g_modeIsOriginal ? APP_COLOR_ARTIST_TEXT : RGB(0xff, 0x8c, 0x00));
             else
                 SetTextColor(hdcStatic, APP_COLOR_LIGHT_TEXT);
 
@@ -853,6 +879,23 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 if (hLangValue)
                     SetWindowTextW(hLangValue, language_to_wstring(lang));
 
+                // English songs don't need translation — hide the mode
+                // value (Translated) and lock to Original.
+                HWND hModeValue = GetDlgItem(hwnd, ID_STATIC_MODE_VALUE);
+                if (hModeValue)
+                {
+                    if (lang == Language::English)
+                    {
+                        ShowWindow(hModeValue, SW_HIDE);
+                        if (!g_modeIsOriginal)
+                            ToggleMode(hwnd);
+                    }
+                    else
+                    {
+                        ShowWindow(hModeValue, SW_SHOW);
+                    }
+                }
+
                 lyrics_display::set_lines(std::move(*linesPtr));
                 delete linesPtr;
             }
@@ -895,6 +938,16 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 case ID_BTN_REFRESH:
                     auto_nudge(0.5);
                     break;
+
+                case ID_STATIC_MODE_LABEL:
+                case ID_STATIC_MODE_VALUE:
+                {
+                    // Don't toggle when Translated is hidden (English songs).
+                    HWND hModeValue = GetDlgItem(hwnd, ID_STATIC_MODE_VALUE);
+                    if (hModeValue && IsWindowVisible(hModeValue))
+                        ToggleMode(hwnd);
+                    break;
+                }
 
                 case ID_BTN_PREV:
                 case ID_BTN_NEXT:

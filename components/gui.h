@@ -22,6 +22,8 @@ void CreateLanguageBarControls(HWND parent, HINSTANCE hInstance);
 void CreateLyricsAreaControls(HWND parent, HINSTANCE hInstance);
 void CreateBottomControls(HWND parent, HINSTANCE hInstance);
 void TogglePlayPause(HWND hwnd);
+void ToggleMode(HWND hwnd);
+void ResetModeToOriginal(HWND hwnd);
 
 // Thread-safe: hands parsed lyric lines to the GUI thread from any thread
 // (e.g. the background thread doing the actual lyrics search).
