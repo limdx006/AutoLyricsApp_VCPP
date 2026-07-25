@@ -19,17 +19,12 @@ int main() {
 
     MediaSessionInfo media = get_media_session_info();
 
-    if (media.is_success)
-    {
-        // Lyrics fetching is handled inside the GUI itself
-        cout << "Launching GUI..." << "\n";
-        int guiExitCode = RunGui(GetModuleHandle(nullptr), SW_SHOWNORMAL);
-        cout << "GUI exit code: " << guiExitCode << "\n";
-    }
-    else
-    {
-        cout << "No media session active." << "\n";
-    }
+    if (!media.is_success)
+        cout << "Warning: No media session active." << "\n";
+
+    cout << "Launching GUI..." << "\n";
+    int guiExitCode = RunGui(GetModuleHandle(nullptr), SW_SHOWNORMAL);
+    cout << "GUI exit code: " << guiExitCode << "\n";
 
     cout << "**********************************************" << "\n";
     cout << "*                     End                    *" << "\n";
