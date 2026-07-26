@@ -162,7 +162,7 @@ namespace lyrics_display {
 
     void handle_anim_timer()
     {
-        if (!g_hwnd)
+        if (!g_animating || !g_hwnd)
             return;
 
         InvalidateRect(g_hwnd, nullptr, FALSE);

@@ -4,6 +4,7 @@
 #include "gui.h"
 #include "lyrics_display.h"
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <thread>
 
@@ -21,6 +22,7 @@ namespace timeline_tracker {
     static wstring g_current_artist;
     static string g_last_lyrics_title;  // title/artist of the last song lyrics were fetched for
     static string g_last_lyrics_artist;
+    static std::atomic<bool> g_lyrics_fetching{false};  // guard against concurrent Python subprocesses
 
     static void update_controls()
     {
@@ -99,6 +101,7 @@ namespace timeline_tracker {
             g_hwnd = nullptr;
             g_hInstance = nullptr;
         }
+        g_lyrics_fetching = false;
     }
 
     // Returns true when the position actually changed (seek / new song) so the
@@ -132,9 +135,18 @@ namespace timeline_tracker {
             string title = media.title;
             string artist = media.artist;
             HWND hwnd = g_hwnd;
+
+            // Atomically claim the fetch slot to prevent multiple concurrent
+            // Python subprocesses (each ~30-50 MB RSS) when the user skips
+            // songs rapidly.  If a fetch is already in flight, skip this
+            // song change; the next one will pick up the new title.
+            if (g_lyrics_fetching.exchange(true))
+                return false;
+
             std::thread([title, artist, hwnd]() {
                 cout << "Fetching lyrics for: " << title << " - " << artist << "\n";
                 LyricsResult result = fetch_lyrics(title, artist);
+                g_lyrics_fetching = false;
                 if (result.success)
                 {
                     cout << "Lyrics found (" << result.lines.size() << " lines)\n";
@@ -249,23 +261,38 @@ namespace timeline_tracker {
                 g_current_position_seconds = (std::min)(g_current_position_seconds, g_duration_seconds);
         }
 
-        // 2. Query WinRT every tick — authoritative correction for seeks.
-        //    No throttling: seeks are detected within ~500 ms.
-        MediaSessionInfo media = get_media_session_info();
-        if (media.is_success)
+        // 2. Local interpolation alone is accurate enough for the display
+        //    between WinRT queries, so throttle the blocking WinRT call
+        //    (~10-50 ms) to every 4th tick (~2 s) instead of every tick.
+        //    The call is still responsive enough for seek/song detection.
+        static int s_skip = 0;
+        if (++s_skip >= 4)
         {
-            // force_position = false so the interpolated position survives
-            // during normal playback; only genuine seeks (>2 s drift)
-            // trigger a WinRT-overwrite.
-            apply_media_state(media, false);
+            s_skip = 0;
 
-            // Ensure title/artist always match the current session.
-            g_current_title = utf8_to_wide(media.title.empty() ? string("Unknown Title") : media.title);
-            g_current_artist = utf8_to_wide(media.artist.empty() ? string("Unknown Artist") : media.artist);
+            MediaSessionInfo media = get_media_session_info();
+            if (media.is_success)
+            {
+                // force_position = false — the interpolated position
+                // survives during normal playback; only genuine seeks
+                // trigger a WinRT overwrite.
+                apply_media_state(media, false);
+
+                // Regardless of whether the position was overwritten,
+                // keep g_last_window_position_seconds in sync with the
+                // latest WinRT sample so the seek-detection delta doesn't
+                // accumulate across multiple throttled ticks.
+                g_last_window_position_seconds = (std::max)(0.0, media.position);
+
+                // Ensure title/artist always match the current session.
+                g_current_title = utf8_to_wide(media.title.empty() ? string("Unknown Title") : media.title);
+                g_current_artist = utf8_to_wide(media.artist.empty() ? string("Unknown Artist") : media.artist);
+            }
         }
 
-        // 3. Reset tick clock NOW (after apply_media_state may have written
-        //    to it) so the next tick always uses a clean wall-clock delta.
+        // 3. Reset tick clock NOW so the next tick always uses a clean
+        //    wall-clock delta (apply_media_state's internal write to
+        //    g_last_update_tick doesn't leak into the interpolation).
         g_last_update_tick = GetTickCount64();
         update_controls();
 
