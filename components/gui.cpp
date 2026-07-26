@@ -15,6 +15,8 @@
 #include <cmath>
 #include <cwctype>
 
+#define IDI_APP 100
+
 // Set once the main window exists; lets a background thread (the lyrics
 // fetch) safely hand results to the GUI thread via PostMessage.
 static std::atomic<HWND> g_mainHwnd{ nullptr };
@@ -202,8 +204,8 @@ int RunGui(HINSTANCE hInstance, int nCmdShow)
     wc.lpszClassName = CLASS_NAME;
     wc.hCursor       = LoadCursor(nullptr, IDC_ARROW);
     wc.hbrBackground = g_hbrBackground;
-    wc.hIcon         = LoadIcon(nullptr, IDI_APPLICATION);
-    wc.hIconSm       = LoadIcon(nullptr, IDI_APPLICATION);
+    wc.hIcon         = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_APP));
+    wc.hIconSm       = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_APP));
 
     if (!RegisterClassExW(&wc))
         return 0;

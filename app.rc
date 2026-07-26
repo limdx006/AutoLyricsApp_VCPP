@@ -1,0 +1,4 @@
+#include <windows.h>
+
+#define IDI_APP 100
+IDI_APP ICON "icon.ico"
