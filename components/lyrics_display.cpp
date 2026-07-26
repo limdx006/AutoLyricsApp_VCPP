@@ -137,8 +137,12 @@ namespace lyrics_display {
         if (newIndex == g_currentIndex)
             return;
 
-        // Only animate the normal "advanced to the next line" case; seeks/jumps snap instantly.
-        bool animate = (newIndex == g_currentIndex + 1);
+        // Animate only for a normal single-line advance when no animation
+        // is already in flight.  If sync is called during an active animation
+        // (e.g. from the 16 ms WM_PAINT or from the 500 ms timeline timer),
+        // starting a *second* animation would snap the scroll back to the
+        // starting offset, causing visible flickering.
+        bool animate = !g_animating && (newIndex == g_currentIndex + 1);
         g_currentIndex = newIndex;
 
         if (animate)
@@ -158,14 +162,8 @@ namespace lyrics_display {
 
     void handle_anim_timer()
     {
-        if (!g_animating || !g_hwnd)
+        if (!g_hwnd)
             return;
-
-        if (GetTickCount64() - g_animStartTick >= LYRICS_ANIM_DURATION_MS)
-        {
-            g_animating = false;
-            KillTimer(g_hwnd, TIMER_ID_LYRICS_ANIM);
-        }
 
         InvalidateRect(g_hwnd, nullptr, FALSE);
     }
@@ -357,12 +355,24 @@ namespace lyrics_display {
             return dir * y;
         };
 
-        // 0 = just started sliding, 1 = settled on the new current line. Ease-out cubic for a smooth finish.
+        // 0 = just started sliding, 1 = settled on the new current line.
+        // Ease-out cubic for a smooth finish.  The animation-end check is
+        // done here (at render time) rather than in handle_anim_timer so
+        // there is no race between the timer expiry and the final draw.
         float t = 1.0f;
         if (g_animating)
         {
-            float raw = (std::min)(1.0f, (float)(GetTickCount64() - g_animStartTick) / LYRICS_ANIM_DURATION_MS);
-            t = 1.0f - std::pow(1.0f - raw, 3.0f);
+            ULONGLONG elapsed = GetTickCount64() - g_animStartTick;
+            if (elapsed >= LYRICS_ANIM_DURATION_MS)
+            {
+                g_animating = false;
+                KillTimer(g_hwnd, TIMER_ID_LYRICS_ANIM);
+            }
+            else
+            {
+                float raw = static_cast<float>(elapsed) / LYRICS_ANIM_DURATION_MS;
+                t = 1.0f - std::pow(1.0f - raw, 3.0f);
+            }
         }
         float shift = g_animating ? (1.0f - t) : 0.0f; // extra slots of vertical shift, 1 -> 0 over the animation
 
