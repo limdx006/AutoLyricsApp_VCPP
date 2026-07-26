@@ -2,6 +2,7 @@
 #include "config.h"
 #include <algorithm>
 #include <cmath>
+#include <unordered_map>
 
 namespace lyrics_display {
     static HWND g_hwnd = nullptr;
@@ -12,9 +13,32 @@ namespace lyrics_display {
     static HFONT g_hFontNormal = nullptr;
     static HFONT g_hFontNear = nullptr;
     static HFONT g_hFontCurrent = nullptr;
-    constexpr float DEFAULT_OFFSET = 0.8f; // positive = lyrics shown that many seconds earlier
+    constexpr float DEFAULT_OFFSET = 1.0f; // positive = lyrics shown that many seconds earlier
     static float g_offsetSeconds = DEFAULT_OFFSET;
     static DisplayStatus g_status = DisplayStatus::NoMedia;
+
+    // Cached fonts indexed by (size << 8) | weight -- avoids a CreateFontW /
+    // DeleteObject cycle per visible line per frame in draw().
+    static std::unordered_map<int, HFONT> g_fontCache;
+
+    static int font_cache_key(int size, int weight)
+    {
+        return (size << 8) | (weight & 0xFF);
+    }
+
+    static HFONT cached_font(int size, int weight)
+    {
+        int key = font_cache_key(size, weight);
+        auto it = g_fontCache.find(key);
+        if (it != g_fontCache.end())
+            return it->second;
+        HFONT hFont = CreateFontW(
+            size, 0, 0, 0, weight, FALSE, FALSE, FALSE,
+            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, FONT_FACE_UI);
+        g_fontCache[key] = hFont;
+        return hFont;
+    }
 
     static void ensure_fonts()
     {
@@ -55,6 +79,10 @@ namespace lyrics_display {
         if (g_hFontNormal)  { DeleteObject(g_hFontNormal);  g_hFontNormal = nullptr; }
         if (g_hFontNear)    { DeleteObject(g_hFontNear);    g_hFontNear = nullptr; }
         if (g_hFontCurrent) { DeleteObject(g_hFontCurrent); g_hFontCurrent = nullptr; }
+
+        for (auto& [key, hFont] : g_fontCache)
+            DeleteObject(hFont);
+        g_fontCache.clear();
     }
 
     void set_lines(vector<LyricLine> lines)
@@ -382,10 +410,7 @@ namespace lyrics_display {
             float absOffset = std::abs(finalOffsetSlots);
             int fontSize, fontWeight;
             fontParamsForOffset(absOffset, fontSize, fontWeight);
-            HFONT font = CreateFontW(
-                fontSize, 0, 0, 0, fontWeight, FALSE, FALSE, FALSE,
-                DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-                CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, FONT_FACE_UI);
+            HFONT font = cached_font(fontSize, fontWeight);
 
             // 3-stop color gradient: white at the center, a brighter "near" tone at the immediate neighbor (offset ~1)
             COLORREF color;
@@ -411,7 +436,7 @@ namespace lyrics_display {
             DrawTextW(hdc, wrappedText[i].c_str(), -1, &lineRect,
                 DT_CENTER | DT_WORDBREAK | DT_NOPREFIX);
             SelectObject(hdc, oldFont);
-            DeleteObject(font);
+            // font is cached; no DeleteObject here
         }
 
         SetBkMode(hdc, oldBkMode);

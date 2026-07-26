@@ -32,10 +32,19 @@ namespace timeline_tracker {
         CURRENT_TIME = std::wstring(currentTimeText.begin(), currentTimeText.end());
         END_TIME = std::wstring(endTimeText.begin(), endTimeText.end());
 
-        HWND hCurrTimeCtrl = GetDlgItem(g_hwnd, ID_STATIC_CURR_TIME);
-        HWND hEndTimeCtrl = GetDlgItem(g_hwnd, ID_STATIC_END_TIME);
-        HWND hSongCtrl = GetDlgItem(g_hwnd, ID_STATIC_SONG);
-        HWND hArtistCtrl = GetDlgItem(g_hwnd, ID_STATIC_ARTIST);
+        // Cache child HWNDs on first use so GetDlgItem (O(n) in child count)
+        // doesn't run every tick.
+        static HWND s_hCurrTime = nullptr;
+        static HWND s_hEndTime  = nullptr;
+        static HWND s_hSong     = nullptr;
+        static HWND s_hArtist   = nullptr;
+        if (!s_hCurrTime)
+        {
+            s_hCurrTime = GetDlgItem(g_hwnd, ID_STATIC_CURR_TIME);
+            s_hEndTime  = GetDlgItem(g_hwnd, ID_STATIC_END_TIME);
+            s_hSong     = GetDlgItem(g_hwnd, ID_STATIC_SONG);
+            s_hArtist   = GetDlgItem(g_hwnd, ID_STATIC_ARTIST);
+        }
 
         // Only touch the control (and repaint) if its text actually changed
         auto setIfChanged = [](HWND ctrl, const wstring& newText) -> bool
@@ -53,10 +62,10 @@ namespace timeline_tracker {
             return false;
         };
 
-        setIfChanged(hCurrTimeCtrl, CURRENT_TIME);
-        setIfChanged(hEndTimeCtrl, END_TIME);
-        bool titleChanged = setIfChanged(hSongCtrl, g_current_title);
-        setIfChanged(hArtistCtrl, g_current_artist);
+        setIfChanged(s_hCurrTime, CURRENT_TIME);
+        setIfChanged(s_hEndTime, END_TIME);
+        bool titleChanged = setIfChanged(s_hSong, g_current_title);
+        setIfChanged(s_hArtist, g_current_artist);
 
         // New song -> re-measure and resize the header box for it
         if (titleChanged)
@@ -234,6 +243,15 @@ namespace timeline_tracker {
 
         g_last_update_tick = now;
         update_controls();
+
+        // Throttle WinRT session queries: only check every 4th tick (~2 s).
+        // Local interpolation keeps the display smooth between queries while
+        // the WinRT call (which blocks the UI thread for ~10-50 ms per call)
+        // is only made every ~2 seconds or on explicit refresh / song change.
+        static int s_skipCounter = 0;
+        if (++s_skipCounter < 4)
+            return;
+        s_skipCounter = 0;
 
         MediaSessionInfo media = get_media_session_info();
         if (!media.is_success)

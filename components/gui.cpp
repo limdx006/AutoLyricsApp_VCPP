@@ -936,7 +936,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 }
 
                 case ID_BTN_REFRESH:
-                    auto_nudge(0.5);
+                    auto_nudge(0.2);
                     break;
 
                 case ID_STATIC_MODE_LABEL:
