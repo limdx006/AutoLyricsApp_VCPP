@@ -10,12 +10,12 @@
 namespace timeline_tracker {
     static HWND g_hwnd = nullptr;
     static HINSTANCE g_hInstance = nullptr;
-    static float g_current_position_seconds = 0.0f;
-    static float g_duration_seconds = 0.0f;
+    static double g_current_position_seconds = 0.0;
+    static double g_duration_seconds = 0.0;
     static bool g_is_playing = false;
     static bool g_has_valid_position = false;
     static ULONGLONG g_last_update_tick = 0;
-    static float g_last_window_position_seconds = -1.0f;
+    static double g_last_window_position_seconds = -1.0;
     static bool g_has_window_position = false;
     static wstring g_current_title;
     static wstring g_current_artist;
@@ -147,13 +147,13 @@ namespace timeline_tracker {
             }).detach();
         }
 
-        const float window_position = (std::max)(0.0f, media.position);
-        const float window_duration = (std::max)(0.0f, media.duration);
+        const double window_position = (std::max)(0.0, media.position);
+        const double window_duration = (std::max)(0.0, media.duration);
 
-        if (g_has_window_position && g_last_window_position_seconds >= 0.0f)
+        if (g_has_window_position && g_last_window_position_seconds >= 0.0)
         {
-            const float position_delta = std::abs(window_position - g_last_window_position_seconds);
-            if (position_delta < 0.001f)
+            const double position_delta = std::abs(window_position - g_last_window_position_seconds);
+            if (position_delta < 0.001)
             {
                 g_duration_seconds = window_duration;
                 g_is_playing = media.is_playing;
@@ -190,12 +190,12 @@ namespace timeline_tracker {
         updateTimelineDisplay();
     }
 
-    float get_current_position_seconds()
+    double get_current_position_seconds()
     {
         return g_current_position_seconds;
     }
 
-    float get_duration_seconds()
+    double get_duration_seconds()
     {
         return g_duration_seconds;
     }
@@ -230,34 +230,34 @@ namespace timeline_tracker {
             return;
 
         const ULONGLONG now = GetTickCount64();
-        const float elapsed_seconds = static_cast<float>(now - g_last_update_tick) / 1000.0f;
-        if (elapsed_seconds <= 0.0f)
+        const double elapsed = static_cast<double>(now - g_last_update_tick) / 1000.0;
+        if (elapsed <= 0.0)
             return;
 
+        // 1. Local interpolation — advance the clock by wall-clock time so
+        //    the displayed time ticks forward smoothly each tick (~500 ms).
         if (g_is_playing)
         {
-            g_current_position_seconds += elapsed_seconds;
-            if (g_duration_seconds > 0.0f)
+            g_current_position_seconds += elapsed;
+            if (g_duration_seconds > 0.0)
                 g_current_position_seconds = (std::min)(g_current_position_seconds, g_duration_seconds);
         }
 
-        g_last_update_tick = now;
-        update_controls();
-
-        // Throttle WinRT session queries: only check every 4th tick (~2 s).
-        // Local interpolation keeps the display smooth between queries while
-        // the WinRT call (which blocks the UI thread for ~10-50 ms per call)
-        // is only made every ~2 seconds or on explicit refresh / song change.
-        static int s_skipCounter = 0;
-        if (++s_skipCounter < 4)
-            return;
-        s_skipCounter = 0;
-
+        // 2. Query WinRT every tick — authoritative correction for seeks.
+        //    No throttling: seeks are detected within ~500 ms.
         MediaSessionInfo media = get_media_session_info();
-        if (!media.is_success)
-            return;
+        if (media.is_success)
+        {
+            apply_media_state(media);
 
-        if (apply_media_state(media))
-            update_controls();
+            // Ensure title/artist always match the current session.
+            g_current_title = utf8_to_wide(media.title.empty() ? string("Unknown Title") : media.title);
+            g_current_artist = utf8_to_wide(media.artist.empty() ? string("Unknown Artist") : media.artist);
+        }
+
+        // 3. Reset tick clock NOW (after apply_media_state may have written
+        //    to it) so the next tick always uses a clean wall-clock delta.
+        g_last_update_tick = GetTickCount64();
+        update_controls();
     }
 }

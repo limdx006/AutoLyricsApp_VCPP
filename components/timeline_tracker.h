@@ -12,8 +12,8 @@ namespace timeline_tracker {
     void refresh_from_media();
     void updateTimelineDisplay();
     void handle_timer();
-    float get_current_position_seconds();
-    float get_duration_seconds();
+    double get_current_position_seconds();
+    double get_duration_seconds();
     wstring get_current_title();
     wstring get_current_artist();
 }

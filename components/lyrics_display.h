@@ -28,7 +28,7 @@ namespace lyrics_display {
     // Call on every timeline position update (e.g. from the existing 500ms
     // timer) to re-check which line should be current and, if it advanced
     // by exactly one line, kick off the slide animation.
-    void sync(float position_seconds);
+    void sync(double position_seconds);
 
     // Call when TIMER_ID_LYRICS_ANIM fires; advances/ends the animation.
     void handle_anim_timer();

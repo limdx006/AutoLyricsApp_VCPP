@@ -13,8 +13,8 @@ namespace lyrics_display {
     static HFONT g_hFontNormal = nullptr;
     static HFONT g_hFontNear = nullptr;
     static HFONT g_hFontCurrent = nullptr;
-    constexpr float DEFAULT_OFFSET = 1.0f; // positive = lyrics shown that many seconds earlier
-    static float g_offsetSeconds = DEFAULT_OFFSET;
+    constexpr double DEFAULT_OFFSET = 1.0; // positive = lyrics shown that many seconds earlier
+    static double g_offsetSeconds = DEFAULT_OFFSET;
     static DisplayStatus g_status = DisplayStatus::NoMedia;
 
     // Cached fonts indexed by (size << 8) | weight -- avoids a CreateFontW /
@@ -109,7 +109,7 @@ namespace lyrics_display {
     }
 
     // Last line whose timestamp <= position_seconds, or -1 if before the first line.
-    static int find_active_index(float position_seconds)
+    static int find_active_index(double position_seconds)
     {
         int lo = 0, hi = (int)g_lines.size() - 1, result = -1;
         while (lo <= hi)
@@ -128,7 +128,7 @@ namespace lyrics_display {
         return result;
     }
 
-    void sync(float position_seconds)
+    void sync(double position_seconds)
     {
         if (g_lines.empty() || !g_hwnd)
             return;

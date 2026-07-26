@@ -7,8 +7,8 @@ struct MediaSessionInfo {
     string title;
     string artist;
 
-    float position;
-    float duration;
+    double position;
+    double duration;
 
     bool is_playing = false;
 };
