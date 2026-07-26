@@ -707,6 +707,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 CARD_LEFT, LYRICS_AREA_TOP,
                 CARD_LEFT + CARD_WIDTH, LYRICS_AREA_TOP + LYRICS_AREA_HEIGHT
             };
+            // Sync with the latest position so the current lyric line is as
+            // up-to-date as possible at render time.
+            lyrics_display::sync(timeline_tracker::get_current_position_seconds());
             lyrics_display::draw(hdc, lyricsRect);
 
             // --- Bottom card (blends with main window background) ---
@@ -847,7 +850,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             if (wParam == timeline_tracker::TIMER_ID_TIMELINE_UPDATE)
             {
                 timeline_tracker::handle_timer();
-                lyrics_display::sync(timeline_tracker::get_current_position_seconds());
+                // lyrics_display::sync() is called inside handle_timer
             }
             else if (wParam == lyrics_display::TIMER_ID_LYRICS_ANIM)
             {

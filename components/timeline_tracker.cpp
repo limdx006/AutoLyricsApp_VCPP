@@ -101,7 +101,9 @@ namespace timeline_tracker {
         }
     }
 
-    static bool apply_media_state(const MediaSessionInfo& media)
+    // Returns true when the position actually changed (seek / new song) so the
+    // caller can decide whether a full display update is needed.
+    static bool apply_media_state(const MediaSessionInfo& media, bool force_position = true)
     {
         // Detect a song change by title/artist rather than position
         if (!media.title.empty() && (media.title != g_last_lyrics_title || media.artist != g_last_lyrics_artist))
@@ -150,10 +152,13 @@ namespace timeline_tracker {
         const double window_position = (std::max)(0.0, media.position);
         const double window_duration = (std::max)(0.0, media.duration);
 
-        if (g_has_window_position && g_last_window_position_seconds >= 0.0)
+        // When not forced, keep the interpolated position during normal
+        // playback and only snap to WinRT on a genuine seek (>2 s drift
+        // from the last applied WinRT anchor).
+        if (!force_position && g_has_window_position && g_last_window_position_seconds >= 0.0)
         {
-            const double position_delta = std::abs(window_position - g_last_window_position_seconds);
-            if (position_delta < 0.001)
+            const double seek_delta = std::abs(window_position - g_last_window_position_seconds);
+            if (seek_delta < 1.0)  // normal inter-tick drift (~0.5 s) + small margin
             {
                 g_duration_seconds = window_duration;
                 g_is_playing = media.is_playing;
@@ -186,8 +191,9 @@ namespace timeline_tracker {
         // Clear the no-media banner now that a session exists.
         lyrics_display::set_status(DisplayStatus::None);
 
-        apply_media_state(media);
+        apply_media_state(media, true);  // force_position = from WinRT
         updateTimelineDisplay();
+        lyrics_display::sync(g_current_position_seconds);
     }
 
     double get_current_position_seconds()
@@ -248,7 +254,10 @@ namespace timeline_tracker {
         MediaSessionInfo media = get_media_session_info();
         if (media.is_success)
         {
-            apply_media_state(media);
+            // force_position = false so the interpolated position survives
+            // during normal playback; only genuine seeks (>2 s drift)
+            // trigger a WinRT-overwrite.
+            apply_media_state(media, false);
 
             // Ensure title/artist always match the current session.
             g_current_title = utf8_to_wide(media.title.empty() ? string("Unknown Title") : media.title);
@@ -259,5 +268,10 @@ namespace timeline_tracker {
         //    to it) so the next tick always uses a clean wall-clock delta.
         g_last_update_tick = GetTickCount64();
         update_controls();
+
+        // Sync lyrics with the final (interpolated or seek-corrected)
+        // position immediately, so the lyric line change is as tight as
+        // possible to the audio.
+        lyrics_display::sync(g_current_position_seconds);
     }
 }
