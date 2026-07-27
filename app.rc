@@ -2,3 +2,6 @@
 
 #define IDI_APP 100
 IDI_APP ICON "icon.ico"
+
+// Embedded Python script for lyrics fetching — extracted to %TEMP% at runtime
+LYRICS_FETCHER RCDATA "components/lyrics_fetcher.py"

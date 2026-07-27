@@ -8,12 +8,59 @@
 
 using json = nlohmann::json;
 
+// Extracts the embedded lyrics_fetcher.py to %TEMP%\AutoLyricsApp\ and returns
+// the absolute path, or an empty string on failure (caller may fall back).
+static string extract_script_to_temp()
+{
+    // Locate the embedded resource
+    HRSRC hRes = FindResourceW(nullptr, L"LYRICS_FETCHER", (LPCWSTR)RT_RCDATA);
+    if (!hRes) return {};
+
+    HGLOBAL hLoaded = LoadResource(nullptr, hRes);
+    if (!hLoaded) return {};
+
+    void* pData = LockResource(hLoaded);
+    DWORD dwSize = SizeofResource(nullptr, hRes);
+    if (!pData || !dwSize) return {};
+
+    // Build %TEMP%\AutoLyricsApp\lyrics_fetcher.py
+    wchar_t tempPath[MAX_PATH];
+    if (!GetTempPathW(MAX_PATH, tempPath))
+        return {};
+
+    wstring scriptDir = wstring(tempPath) + L"AutoLyricsApp";
+    wstring scriptPath = scriptDir + L"\\lyrics_fetcher.py";
+
+    CreateDirectoryW(scriptDir.c_str(), nullptr);
+
+    // Always overwrite so the extracted copy matches the embedded one.
+    FILE* f = nullptr;
+    if (_wfopen_s(&f, scriptPath.c_str(), L"wb") != 0 || !f)
+        return {};
+
+    fwrite(pData, 1, dwSize, f);
+    fclose(f);
+
+    // Convert back to narrow string for the _popen command line
+    int len = WideCharToMultiByte(CP_UTF8, 0, scriptPath.c_str(), -1, nullptr, 0, nullptr, nullptr);
+    if (len <= 0) return {};
+    string path(len - 1, 0);
+    WideCharToMultiByte(CP_UTF8, 0, scriptPath.c_str(), -1, &path[0], len, nullptr, nullptr);
+    return path;
+}
+
 string get_lyrics(const string& title, const string& artist)
 {
     SetEnvironmentVariableW(L"TRACK_TITLE", utf8_to_wide(title).c_str());
     SetEnvironmentVariableW(L"TRACK_ARTIST", utf8_to_wide(artist).c_str());
 
-    string command = "python lyrics_fetcher.py";
+    // Extract the embedded script to temp, fall back to co-located file
+    // (for development convenience when running from the build directory).
+    string scriptPath = extract_script_to_temp();
+    if (scriptPath.empty())
+        scriptPath = "components/Lyrics_fetcher.py";
+
+    string command = "python \"" + scriptPath + "\"";
 
     array<char, 256> buffer;
     string result;
