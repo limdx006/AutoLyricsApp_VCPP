@@ -3,6 +3,10 @@ call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Too
 
 cd /d D:\Personal_GitHub_rep\AutoLyricsApp_VCPP
 
+echo Building Python helper exe...
+python components\build_py_exe.py
+echo Done.
+
 rc app.rc
 
 cl /EHsc /std:c++20 /Fo"obj\\" /Fd"obj\\" main.cpp components\*.cpp /I"components" /I"vcpkg\installed\x64-windows\include" app.res /link user32.lib gdi32.lib comctl32.lib runtimeobject.lib windowsapp.lib

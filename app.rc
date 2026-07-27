@@ -3,5 +3,10 @@
 #define IDI_APP 100
 IDI_APP ICON "icon.ico"
 
-// Embedded Python script for lyrics fetching — extracted to %TEMP% at runtime
-LYRICS_FETCHER RCDATA "components/lyrics_fetcher.py"
+// Embedded Python helper executable (PyInstaller bundle of lyrics_fetcher.py)
+// — extracted to %TEMP%\AutoLyricsApp\ at runtime and invoked directly.
+PY_HELPER RCDATA "py_helper.exe"
+
+// Embedded Python script for romanization (JP→Romaji, KO→Romaji, ZH→PinYin)
+// — not yet linked from C++; kept for future integration.
+// LYRICS_TRANSLATOR RCDATA "components/lyrics_translator.py"
