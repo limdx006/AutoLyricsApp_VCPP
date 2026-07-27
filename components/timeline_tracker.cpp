@@ -298,7 +298,7 @@ namespace timeline_tracker {
             s_last_call_tick = now;
         const double call_interval = static_cast<double>(now - s_last_call_tick) / 1000.0;
         s_last_call_tick = now;
-        printf("[TICK] call_interval=%.3fs elapsed=%.3fs pos=%.3f\n", call_interval, elapsed, g_current_position_seconds);
+        // printf("[TICK] call_interval=%.3fs elapsed=%.3fs pos=%.3f\n", call_interval, elapsed, g_current_position_seconds);
 
         // 1. Local interpolation — advance the clock by wall-clock time so
         //    the displayed time ticks forward smoothly each tick (~500 ms).
