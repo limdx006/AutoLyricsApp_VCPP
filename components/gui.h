@@ -14,6 +14,10 @@
 // wParam is a DisplayStatus value cast to WPARAM.
 #define WM_APP_LYRICS_STATUS (WM_APP + 2)
 
+// Posted from the high-resolution timer queue callback so handle_timer
+// runs on the UI thread without WM_TIMER's low-priority coalescing.
+#define WM_APP_TIMELINE_TICK (WM_APP + 3)
+
 int RunGui(HINSTANCE hInstance, int nCmdShow);
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 void CreateHeaderControls(HWND parent, HINSTANCE hInstance);

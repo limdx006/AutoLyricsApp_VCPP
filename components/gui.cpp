@@ -849,15 +849,17 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
         case WM_TIMER:
         {
-            if (wParam == timeline_tracker::TIMER_ID_TIMELINE_UPDATE)
-            {
-                timeline_tracker::handle_timer();
-                // lyrics_display::sync() is called inside handle_timer
-            }
-            else if (wParam == lyrics_display::TIMER_ID_LYRICS_ANIM)
+            if (wParam == lyrics_display::TIMER_ID_LYRICS_ANIM)
             {
                 lyrics_display::handle_anim_timer();
             }
+            return 0;
+        }
+
+        case WM_APP_TIMELINE_TICK:
+        {
+            timeline_tracker::handle_timer();
+            // lyrics_display::sync() is called inside handle_timer
             return 0;
         }
 

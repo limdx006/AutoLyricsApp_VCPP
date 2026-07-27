@@ -23,6 +23,17 @@ namespace timeline_tracker {
     static string g_last_lyrics_title;  // title/artist of the last song lyrics were fetched for
     static string g_last_lyrics_artist;
     static std::atomic<bool> g_lyrics_fetching{false};  // guard against concurrent Python subprocesses
+    static HANDLE g_hTimerQueue = nullptr;  // high-resolution timer queue
+    static HANDLE g_hTimer = nullptr;
+
+    // Callback from the high-resolution timer queue — runs on a thread pool
+    // thread, not the UI thread.  Post a message so handle_timer runs on the
+    // UI thread.
+    static void CALLBACK timer_queue_callback(PVOID, BOOLEAN)
+    {
+        if (g_hwnd)
+            PostMessageW(g_hwnd, WM_APP_TIMELINE_TICK, 0, 0);
+    }
 
     static void update_controls()
     {
@@ -90,14 +101,35 @@ namespace timeline_tracker {
         g_current_artist.clear();
 
         refresh_from_media();
-        SetTimer(g_hwnd, TIMER_ID_TIMELINE_UPDATE, TIMELINE_UPDATE_INTERVAL_MS, nullptr);
+
+        // Create a high-resolution timer queue (runs callback on thread pool,
+        // avoiding WM_TIMER's low-priority coalescing and ~16ms granularity).
+        g_hTimerQueue = CreateTimerQueue();
+        if (g_hTimerQueue)
+        {
+            CreateTimerQueueTimer(&g_hTimer, g_hTimerQueue,
+                                  timer_queue_callback, nullptr,
+                                  TIMELINE_UPDATE_INTERVAL_MS,  // due time
+                                  TIMELINE_UPDATE_INTERVAL_MS,  // period
+                                  WT_EXECUTELONGFUNCTION);      // allow >10ms callbacks
+        }
     }
 
     void cleanup()
     {
+        if (g_hTimer)
+        {
+            DeleteTimerQueueTimer(g_hTimerQueue, g_hTimer, INVALID_HANDLE_VALUE);
+            g_hTimer = nullptr;
+        }
+        if (g_hTimerQueue)
+        {
+            DeleteTimerQueueEx(g_hTimerQueue, INVALID_HANDLE_VALUE);
+            g_hTimerQueue = nullptr;
+        }
+
         if (g_hwnd != nullptr)
         {
-            KillTimer(g_hwnd, TIMER_ID_TIMELINE_UPDATE);
             g_hwnd = nullptr;
             g_hInstance = nullptr;
         }
@@ -178,7 +210,7 @@ namespace timeline_tracker {
         if (!force_position && g_has_window_position && g_last_window_position_seconds >= 0.0)
         {
             const double seek_delta = std::abs(window_position - g_last_window_position_seconds);
-            if (seek_delta < 2.0)  // normal inter-tick drift (~0.5 s) + small margin
+            if (seek_delta < 1.0)  // normal inter-tick drift (~0.5 s) + small margin
             {
                 g_duration_seconds = window_duration;
                 g_is_playing = media.is_playing;
@@ -260,6 +292,14 @@ namespace timeline_tracker {
         if (elapsed <= 0.0)
             return;
 
+        // Diagnostic: log the actual interval between handle_timer calls
+        static ULONGLONG s_last_call_tick = 0;
+        if (s_last_call_tick == 0)
+            s_last_call_tick = now;
+        const double call_interval = static_cast<double>(now - s_last_call_tick) / 1000.0;
+        s_last_call_tick = now;
+        printf("[TICK] call_interval=%.3fs elapsed=%.3fs pos=%.3f\n", call_interval, elapsed, g_current_position_seconds);
+
         // 1. Local interpolation — advance the clock by wall-clock time so
         //    the displayed time ticks forward smoothly each tick (~500 ms).
         if (g_is_playing)
@@ -298,10 +338,11 @@ namespace timeline_tracker {
             }
         }
 
-        // 3. Reset tick clock NOW so the next tick always uses a clean
-        //    wall-clock delta (apply_media_state's internal write to
-        //    g_last_update_tick doesn't leak into the interpolation).
-        g_last_update_tick = GetTickCount64();
+        // 3. Reset tick clock using the start-of-tick time so the next
+        //    call's elapsed measures the full wall-clock interval — not
+        //    minus the processing time of this call — avoiding cumulative
+        //    drift.
+        g_last_update_tick = now;
         update_controls();
 
         // Sync lyrics with the final (interpolated or seek-corrected)
