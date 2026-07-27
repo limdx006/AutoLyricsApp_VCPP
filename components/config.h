@@ -131,8 +131,8 @@ extern const COLORREF APP_COLOR_PROGRESS_BAR; // progress bar fill color
 // Hardcoded display text (temporary, until real song data is wired up)
 extern const wchar_t* const SONG_NAME;
 extern const wchar_t* const ARTIST_NAME;
-extern std::wstring CURRENT_TIME;
-extern std::wstring END_TIME;
+extern wstring CURRENT_TIME;
+extern wstring END_TIME;
 extern const wchar_t* const STATUS_TEXT;
 
 // Language bar display text

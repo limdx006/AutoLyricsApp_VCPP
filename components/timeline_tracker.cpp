@@ -164,13 +164,21 @@ namespace timeline_tracker {
         const double window_position = (std::max)(0.0, media.position);
         const double window_duration = (std::max)(0.0, media.duration);
 
+        // Print when the WinRT session returns a genuinely new position value
+        static double s_last_winrt_position = -1.0;
+        if (std::abs(window_position - s_last_winrt_position) > 0.01)
+        {
+            printf("[SESSION] window_pos=%.3f duration=%.3f\n", window_position, window_duration);
+            s_last_winrt_position = window_position;
+        }
+
         // When not forced, keep the interpolated position during normal
         // playback and only snap to WinRT on a genuine seek (>2 s drift
         // from the last applied WinRT anchor).
         if (!force_position && g_has_window_position && g_last_window_position_seconds >= 0.0)
         {
             const double seek_delta = std::abs(window_position - g_last_window_position_seconds);
-            if (seek_delta < 1.0)  // normal inter-tick drift (~0.5 s) + small margin
+            if (seek_delta < 2.0)  // normal inter-tick drift (~0.5 s) + small margin
             {
                 g_duration_seconds = window_duration;
                 g_is_playing = media.is_playing;
