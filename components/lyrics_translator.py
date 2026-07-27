@@ -1,10 +1,18 @@
-import re
+import json
+import sys
+
 import cutlet as _cutlet
 from pypinyin import lazy_pinyin as _lazy_pinyin, Style as _Style
 
-"""LYRICS UTILS - Pure helper functions for tranlating
-- Japanese and Korean to Romaji
-- Chinese to PinYin
+"""LYRICS TRANSLATOR - Romanization helpers + standalone entry point
+
+Functions:
+- Japanese/Korean  text → Romaji
+- Chinese          text → PinYin
+
+Standalone usage (JSON-in-JSON-out via stdin/stdout):
+    echo '{"language":"ja","lines":["こんにちは"]}' | python translator.py
+    → {"success":true,"lines":["konnichiwa"]}
 """
 
 # Single shared instances — initialising these is expensive so do it once at import
@@ -21,17 +29,16 @@ def _get_korean_romanizer():
         return _korean_romanizer
     try:
         from korean_romanizer.romanizer import Romanizer
-
         _korean_romanizer = Romanizer
         return _korean_romanizer
     except Exception as e:
-        print("korean-romanizer import failed:", e)
+        print("korean-romanizer import failed:", e, file=sys.stderr)
         _korean_romanizer = None
         return None
 
 
 def to_romaji(text):
-    """Convert Japanese text to Hepburn romaji using cutlet (primary) with pykakasi as fallback."""
+    """Convert Japanese text to Hepburn romaji using cutlet."""
     if not text:
         return text
     try:
@@ -60,3 +67,35 @@ def to_romanized_korean(text):
         return r.romanize()
     except Exception:
         return text
+
+
+def _batch_convert(lines, language):
+    """Convert a list of lines according to *language*."""
+    if language == "ja":
+        return [to_romaji(line) for line in lines]
+    elif language == "ko":
+        return [to_romanized_korean(line) for line in lines]
+    elif language == "zh":
+        return [to_pinyin(line) for line in lines]
+    else:
+        return list(lines)  # passthrough
+
+
+def main():
+    """Read JSON from stdin, write JSON to stdout."""
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+
+    data = json.load(sys.stdin)
+    language = data.get("language", "")
+    lines = data.get("lines", [])
+
+    converted = _batch_convert(lines, language)
+
+    json.dump({"success": True, "lines": converted}, sys.stdout,
+              ensure_ascii=False)
+    sys.stdout.flush()
+
+
+if __name__ == "__main__":
+    main()
