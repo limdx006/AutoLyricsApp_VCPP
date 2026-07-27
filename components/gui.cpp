@@ -52,6 +52,10 @@ static bool g_isPlaying = true;
 // false = Translated mode is highlighted, true = Original mode is highlighted
 static bool g_modeIsOriginal = true;
 
+// Holds the detected language of the currently-loaded lyrics so the
+// "Current:" column can reflect it when toggling between Original/Translated.
+static Language g_lastDetectedLanguage = Language::Unknown;
+
 static void UpdatePlayPauseButton(HWND hwnd)
 {
     HWND hBtn = GetDlgItem(hwnd, ID_BTN_PLAY_PAUSE);
@@ -594,6 +598,37 @@ void ResetModeToOriginal(HWND hwnd)
     if (hValue) InvalidateRect(hValue, nullptr, TRUE);
 }
 
+// Updates ID_STATIC_CURRENT_VALUE based on the detected language and mode.
+// Original mode → same label as "Language:"; Translated mode → Romaji / PinYin.
+void UpdateCurrentValue(HWND hwnd)
+{
+    HWND hCurrent = GetDlgItem(hwnd, ID_STATIC_CURRENT_VALUE);
+    if (!hCurrent) return;
+
+    const wchar_t* text;
+    if (g_modeIsOriginal)
+    {
+        text = language_to_wstring(g_lastDetectedLanguage);
+    }
+    else
+    {
+        switch (g_lastDetectedLanguage)
+        {
+        case Language::Japanese:
+        case Language::Korean:
+            text = L"Romaji";
+            break;
+        case Language::Chinese:
+            text = L"PinYin";
+            break;
+        default:
+            text = language_to_wstring(g_lastDetectedLanguage);
+            break;
+        }
+    }
+    SetWindowTextW(hCurrent, text);
+}
+
 void HandlePlaybackAction(HWND hwnd, int controlId)
 {
     using playback_controls::PlaybackAction;
@@ -882,9 +917,14 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                     texts.push_back(line.text);
 
                 Language lang = detect_language(texts);
+                g_lastDetectedLanguage = lang;
+
                 HWND hLangValue = GetDlgItem(hwnd, ID_STATIC_LANG_VALUE);
                 if (hLangValue)
                     SetWindowTextW(hLangValue, language_to_wstring(lang));
+
+                // Sync "Current:" with the new language
+                UpdateCurrentValue(hwnd);
 
                 // English songs don't need translation — hide the mode
                 // value (Translated) and lock to Original.
@@ -952,7 +992,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                     // Don't toggle when Translated is hidden (English songs).
                     HWND hModeValue = GetDlgItem(hwnd, ID_STATIC_MODE_VALUE);
                     if (hModeValue && IsWindowVisible(hModeValue))
+                    {
                         ToggleMode(hwnd);
+                        UpdateCurrentValue(hwnd);
+                    }
                     break;
                 }
 
