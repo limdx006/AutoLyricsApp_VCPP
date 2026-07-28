@@ -33,3 +33,14 @@ inline wstring utf8_to_wide(const string& s)
     MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, &w[0], len);
     return w;
 }
+
+// Encodes a UTF-16 std::wstring into a UTF-8 std::string.
+inline string wide_to_utf8(const wstring& w)
+{
+    if (w.empty()) return "";
+    int len = WideCharToMultiByte(CP_UTF8, 0, w.c_str(), -1, nullptr, 0, nullptr, nullptr);
+    if (len <= 0) return "";
+    string s(len - 1, 0);
+    WideCharToMultiByte(CP_UTF8, 0, w.c_str(), -1, &s[0], len, nullptr, nullptr);
+    return s;
+}

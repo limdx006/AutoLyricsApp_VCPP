@@ -83,6 +83,7 @@ def _batch_convert(lines, language):
 
 def main():
     """Read JSON from stdin, write JSON to stdout."""
+    sys.stdin.reconfigure(encoding="utf-8")
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
 

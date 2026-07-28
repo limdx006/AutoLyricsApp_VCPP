@@ -3,6 +3,7 @@
 #include "time_formatter.h"
 #include "gui.h"
 #include "lyrics_display.h"
+#include "language_detector.h"
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -183,6 +184,24 @@ namespace timeline_tracker {
                 {
                     cout << "Lyrics found (" << result.lines.size() << " lines)\n";
                     SubmitLyrics(result.lines);
+
+                    // Detect language and call translator (development phase:
+                    // prints romanized/translated text to the terminal).
+                    vector<wstring> texts;
+                    texts.reserve(result.lines.size());
+                    for (const auto& line : result.lines)
+                        texts.push_back(line.text);
+
+                    Language lang = detect_language(texts);
+                    string langCode;
+                    switch (lang)
+                    {
+                        case Language::Japanese: langCode = "ja"; break;
+                        case Language::Korean:   langCode = "ko"; break;
+                        case Language::Chinese:  langCode = "zh"; break;
+                        default:                 langCode = "en"; break;
+                    }
+                    translate_lyrics(texts, langCode);
                 }
                 else
                 {

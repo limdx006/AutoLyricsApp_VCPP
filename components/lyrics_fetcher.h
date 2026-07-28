@@ -19,3 +19,6 @@ string get_lyrics(const string& title, const string& artist);
 // Same as get_lyrics(), but parses the JSON response and splits the LRC
 // text it contains into timestamped lines ready for display.
 LyricsResult fetch_lyrics(const string& title, const string& artist);
+
+// Calls lyrics_translator.py to romanize/translate the given lyric text
+void translate_lyrics(const vector<wstring>& texts, const string& langCode); 
