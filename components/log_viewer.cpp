@@ -149,10 +149,6 @@ namespace log_viewer {
         vsnprintf(buf, sizeof(buf), format, args);
         va_end(args);
 
-        // Always go to the terminal so the console user sees it.
-        fprintf(stdout, "%s", buf);
-        fflush(stdout);
-
         // Store in the ring buffer.
         {
             std::lock_guard<std::mutex> lock(s_mutex);

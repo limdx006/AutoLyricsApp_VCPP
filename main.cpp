@@ -3,6 +3,7 @@
 #include "components/gui.h" // To launch the Win32 GUI window
 #include "components/auto_nudge.h"
 #include "components/timeline_tracker.h"
+#include "components/log_viewer.h"
 
 #include <windows.h>
 
@@ -11,24 +12,24 @@ int main() {
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
 
-    cout << "**********************************************" << "\n";
-    cout << "*            AutoLyrics App v1.0             *" << "\n";
-    cout << "**********************************************" << "\n";
+    log_viewer::log("**********************************************\n");
+    log_viewer::log("*            AutoLyrics App v1.0             *\n");
+    log_viewer::log("**********************************************\n");
 
     auto_nudge();
 
     MediaSessionInfo media = get_media_session_info();
 
     if (!media.is_success)
-        cout << "Warning: No media session active." << "\n";
+        log_viewer::log("Warning: No media session active.\n");
 
-    cout << "Launching GUI..." << "\n";
+    log_viewer::log("Launching GUI...\n");
     int guiExitCode = RunGui(GetModuleHandle(nullptr), SW_SHOWNORMAL);
-    cout << "GUI exit code: " << guiExitCode << "\n";
+    log_viewer::log("GUI exit code: %d\n", guiExitCode);
 
-    cout << "**********************************************" << "\n";
-    cout << "*                     End                    *" << "\n";
-    cout << "**********************************************" << "\n";
+    log_viewer::log("**********************************************\n");
+    log_viewer::log("*                     End                    *\n");
+    log_viewer::log("**********************************************\n");
 
     return 0;
 }
