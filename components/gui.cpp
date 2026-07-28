@@ -906,6 +906,29 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         {
             DisplayStatus status = static_cast<DisplayStatus>(wParam);
             lyrics_display::set_status(status);
+
+            // When no lyrics are found, reset the language bar to Unknown
+            // and hide the mode toggle (same treatment as English songs).
+            if (status == DisplayStatus::NoLyrics)
+            {
+                g_lastDetectedLanguage = Language::Unknown;
+
+                HWND hLangValue = GetDlgItem(hwnd, ID_STATIC_LANG_VALUE);
+                if (hLangValue)
+                    SetWindowTextW(hLangValue, L"Unknown");
+
+                HWND hCurrentValue = GetDlgItem(hwnd, ID_STATIC_CURRENT_VALUE);
+                if (hCurrentValue)
+                    SetWindowTextW(hCurrentValue, L"Unknown");
+
+                HWND hModeValue = GetDlgItem(hwnd, ID_STATIC_MODE_VALUE);
+                if (hModeValue)
+                {
+                    ShowWindow(hModeValue, SW_HIDE);
+                    if (!g_modeIsOriginal)
+                        ToggleMode(hwnd);
+                }
+            }
             return 0;
         }
 
