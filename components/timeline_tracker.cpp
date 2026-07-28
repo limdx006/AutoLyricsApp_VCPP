@@ -1,6 +1,7 @@
 #include "timeline_tracker.h"
 #include "media_session.h"
 #include "gui.h"
+#include "log_viewer.h"
 #include "lyrics_display.h"
 #include <algorithm>
 #include <atomic>
@@ -76,17 +77,17 @@ namespace timeline_tracker {
                 return false;
 
             std::thread([title, artist, hwnd]() {
-                cout << "Fetching lyrics for: " << title << " - " << artist << "\n";
+                log_viewer::log("[FETCH] Fetching lyrics for: %s - %s\n", title.c_str(), artist.c_str());
                 LyricsResult result = fetch_lyrics(title, artist);
                 g_lyrics_fetching = false;
                 if (result.success)
                 {
-                    cout << "Lyrics found (" << result.lines.size() << " lines)\n";
+                    log_viewer::log("[FETCH] Lyrics found (%zu lines)\n", result.lines.size());
                     SubmitLyrics(result.lines);
                 }
                 else
                 {
-                    cout << "No synced lyrics found.\n";
+                    log_viewer::log("[FETCH] No synced lyrics found.\n");
                     if (hwnd)
                         PostMessageW(hwnd, WM_APP_LYRICS_STATUS, (WPARAM)DisplayStatus::NoLyrics, 0);
                 }
@@ -100,7 +101,7 @@ namespace timeline_tracker {
         static double s_last_winrt_position = -1.0;
         if (std::abs(window_position - s_last_winrt_position) > 0.01)
         {
-            printf("[SESSION] window_pos=%.3f duration=%.3f\n", window_position, window_duration);
+            log_viewer::log("[SESSION] window_pos=%.3f duration=%.3f\n", window_position, window_duration);
             s_last_winrt_position = window_position;
         }
 

@@ -1,4 +1,5 @@
 #include "auto_nudge.h"
+#include "log_viewer.h"
 #include "playback_controls.h"
 
 void auto_nudge(float sleep_delay)
@@ -14,8 +15,8 @@ void auto_nudge(float sleep_delay)
     // If already paused, do nothing — otherwise we'd resume playback.
     if (!was_playing)
         return;
-    
-    cout << "Attempt auto nudge" << "\n";
+
+    log_viewer::log("[NUDGE] Attempt auto nudge\n");
     do {
         playback_controls::send_action(PlaybackAction::PlayPause);
 
@@ -27,5 +28,5 @@ void auto_nudge(float sleep_delay)
         attempts++;
 
     } while(!was_playing);
-    cout << "Auto nudge success in: " << attempts << "\n";
+    log_viewer::log("[NUDGE] Auto nudge success in: %d\n", attempts);
 }

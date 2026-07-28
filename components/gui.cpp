@@ -9,6 +9,7 @@
 #include "timeline_tracker.h"
 #include "lyrics_display.h"
 #include "language_detector.h"
+#include "log_viewer.h"
 #include <algorithm>
 #include <atomic>
 #include <thread>
@@ -691,6 +692,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         case WM_CREATE:
         {
             HINSTANCE hInstance = ((LPCREATESTRUCTW)lParam)->hInstance;
+            log_viewer::initialize(hInstance);
             timeline_tracker::initialize(hwnd, hInstance);
             lyrics_display::initialize(hwnd);
             CreateHeaderControls(hwnd, hInstance);
@@ -1056,6 +1058,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                     auto_nudge(0.2);
                     break;
 
+                case ID_BTN_LOG:
+                    log_viewer::toggle_window(hwnd);
+                    break;
+
                 case ID_STATIC_MODE_LABEL:
                 case ID_STATIC_MODE_VALUE:
                 {
@@ -1121,6 +1127,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         case WM_DESTROY:
             timeline_tracker::cleanup();
             lyrics_display::cleanup();
+            log_viewer::cleanup();
             g_mainHwnd.store(nullptr);
             if (g_hbrBackground)  { DeleteObject(g_hbrBackground);  g_hbrBackground = nullptr; }
             if (g_hbrCard)        { DeleteObject(g_hbrCard);        g_hbrCard = nullptr; }
