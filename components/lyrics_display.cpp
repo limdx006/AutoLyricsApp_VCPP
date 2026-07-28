@@ -7,6 +7,8 @@
 namespace lyrics_display {
     static HWND g_hwnd = nullptr;
     static vector<LyricLine> g_lines;
+    static vector<wstring> g_translatedTexts; // cached romanized/pinyin texts for current song
+    static bool g_showTranslated = false;     // true = render g_translatedTexts instead of g_lines
     static int g_currentIndex = -1;
     static bool g_animating = false;
     static ULONGLONG g_animStartTick = 0;
@@ -65,6 +67,8 @@ namespace lyrics_display {
     {
         g_hwnd = hwnd;
         g_lines.clear();
+        g_translatedTexts.clear();
+        g_showTranslated = false;
         g_currentIndex = -1;
         g_animating = false;
         ensure_fonts();
@@ -91,6 +95,8 @@ namespace lyrics_display {
             g_status = DisplayStatus::None;
 
         g_lines = std::move(lines);
+        g_translatedTexts.clear();
+        g_showTranslated = false;
         g_currentIndex = -1;
         g_animating = false;
 
@@ -106,6 +112,47 @@ namespace lyrics_display {
         g_status = status;
         if (g_hwnd)
             InvalidateRect(g_hwnd, nullptr, FALSE);
+    }
+
+    void set_translated_texts(vector<wstring> texts)
+    {
+        g_translatedTexts = std::move(texts);
+        if (g_hwnd)
+            InvalidateRect(g_hwnd, nullptr, FALSE);
+    }
+
+    void clear_translated_texts()
+    {
+        g_translatedTexts.clear();
+        g_showTranslated = false;
+        if (g_hwnd)
+            InvalidateRect(g_hwnd, nullptr, FALSE);
+    }
+
+    bool has_translated_texts()
+    {
+        return !g_translatedTexts.empty();
+    }
+
+    void set_show_translated(bool show)
+    {
+        g_showTranslated = show;
+        if (g_hwnd)
+            InvalidateRect(g_hwnd, nullptr, FALSE);
+    }
+
+    bool is_showing_translated()
+    {
+        return g_showTranslated && !g_translatedTexts.empty();
+    }
+
+    vector<wstring> get_lyric_texts()
+    {
+        vector<wstring> texts;
+        texts.reserve(g_lines.size());
+        for (const auto& line : g_lines)
+            texts.push_back(line.text);
+        return texts;
     }
 
     // Last line whose timestamp <= position_seconds, or -1 if before the first line.
@@ -198,8 +245,9 @@ namespace lyrics_display {
         int textRight = area.right - horizontalMargin;
         int textWidth = textRight - textLeft;
 
-        // When no lines are loaded, show a status message instead.
-        if (g_lines.empty())
+        // When no lines are loaded, or translated mode is active without
+        // cached translations yet, show a status message instead.
+        if (g_lines.empty() || (g_showTranslated && g_translatedTexts.empty()))
         {
             if (g_status == DisplayStatus::None)
                 return;
@@ -219,6 +267,10 @@ namespace lyrics_display {
                 case DisplayStatus::NoMedia:
                     text = L"No detected media";
                     color = RGB(0x4a, 0xcc, 0x6a); // green
+                    break;
+                case DisplayStatus::Translating:
+                    text = L"Translating lyrics......";
+                    color = RGB(0xff, 0xcc, 0x00); // amber
                     break;
                 default: return;
             }
@@ -318,10 +370,14 @@ namespace lyrics_display {
         // at every position (far, near, centre) rather than changing as the line scrolls.
         int minIndex = (std::max)(0, g_currentIndex - linesAbove - 1);
         int maxIndex = (std::min)((int)g_lines.size() - 1, g_currentIndex + linesBelow + 1);
+        bool useTranslated = g_showTranslated && g_translatedTexts.size() == g_lines.size();
         HFONT oldWrapFont = (HFONT)SelectObject(hdc, g_hFontCurrent);
         vector<wstring> wrappedText(g_lines.size());
         for (int i = minIndex; i <= maxIndex; ++i)
-            wrappedText[i] = word_wrap(g_lines[i].text);
+        {
+            const wstring& srcText = useTranslated ? g_translatedTexts[i] : g_lines[i].text;
+            wrappedText[i] = word_wrap(srcText);
+        }
         SelectObject(hdc, oldWrapFont);
 
         // Real (possibly wrapped) height of a specific slot's line, measured fresh each frame

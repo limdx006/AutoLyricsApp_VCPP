@@ -21,4 +21,6 @@ string get_lyrics(const string& title, const string& artist);
 LyricsResult fetch_lyrics(const string& title, const string& artist);
 
 // Calls lyrics_translator.py to romanize/translate the given lyric text
-void translate_lyrics(const vector<wstring>& texts, const string& langCode); 
+// lines according to the language code ("ja", "ko", "zh", "en").
+// Returns the translated texts as UTF-16 strings, or an empty vector on failure.
+vector<wstring> translate_lyrics(const vector<wstring>& texts, const string& langCode); 

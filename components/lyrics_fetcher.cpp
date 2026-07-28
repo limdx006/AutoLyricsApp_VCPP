@@ -146,9 +146,10 @@ LyricsResult fetch_lyrics(const string& title, const string& artist)
     return result;
 }
 
-void translate_lyrics(const vector<wstring>& texts, const string& langCode)
+vector<wstring> translate_lyrics(const vector<wstring>& texts, const string& langCode)
 {
-    if (texts.empty()) return;
+    vector<wstring> result;
+    if (texts.empty()) return result;
 
     // ── Build JSON input ──
     json j;
@@ -161,20 +162,20 @@ void translate_lyrics(const vector<wstring>& texts, const string& langCode)
 
     // ── Write JSON to a temp file ──
     wchar_t tempPath[MAX_PATH];
-    if (!GetTempPathW(MAX_PATH, tempPath)) return;
+    if (!GetTempPathW(MAX_PATH, tempPath)) return result;
 
     const wstring tempDir = wstring(tempPath) + L"AutoLyricsApp";
     CreateDirectoryW(tempDir.c_str(), nullptr);
 
     wchar_t tempFile[MAX_PATH];
-    if (!GetTempFileNameW(tempDir.c_str(), L"TRN", 0, tempFile)) return;
+    if (!GetTempFileNameW(tempDir.c_str(), L"TRN", 0, tempFile)) return result;
 
     {
         FILE* f = nullptr;
         if (_wfopen_s(&f, tempFile, L"wb") != 0 || !f)
         {
             DeleteFileW(tempFile);
-            return;
+            return result;
         }
         fwrite(jsonInput.data(), 1, jsonInput.size(), f);
         fclose(f);
@@ -190,42 +191,31 @@ void translate_lyrics(const vector<wstring>& texts, const string& langCode)
     if (!pipe)
     {
         DeleteFileW(tempFile);
-        return;
+        return result;
     }
     while (fgets(buffer.data(), buffer.size(), pipe))
         rawOutput += buffer.data();
     _pclose(pipe);
     DeleteFileW(tempFile);
 
-    // ── Parse JSON response and print ──
+    // ── Parse JSON response ──
     try
     {
         const json out = json::parse(rawOutput);
         if (!out.value("success", false))
-        {
-            printf("[TRANSLATE] Translator returned failure\n");
-            return;
-        }
+            return result;
 
         const auto translated = out["lines"];
         if (!translated.is_array() || translated.empty())
-        {
-            printf("[TRANSLATE] No translated lines returned\n");
-            return;
-        }
+            return result;
 
-        printf("\n=== Translated lyrics (%s) ===\n", langCode.c_str());
-        for (size_t i = 0; i < translated.size() && i < texts.size(); ++i)
-        {
-            const string trans = translated[i].get<string>();
-            const string orig = wide_to_utf8(texts[i]);
-            if (orig != trans)
-                printf("  %s\n", trans.c_str());
-        }
-        printf("=== End ===\n");
+        result.reserve(translated.size());
+        for (const auto& line : translated)
+            result.push_back(utf8_to_wide(line.get<string>()));
     }
-    catch (const std::exception& e)
+    catch (...)
     {
-        printf("[TRANSLATE] Parse error: %s\n", e.what());
+        result.clear();
     }
+    return result;
 }

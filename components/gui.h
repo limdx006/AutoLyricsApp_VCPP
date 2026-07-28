@@ -18,6 +18,10 @@
 // runs on the UI thread without WM_TIMER's low-priority coalescing.
 #define WM_APP_TIMELINE_TICK (WM_APP + 3)
 
+// Posted from a background thread once translation completes;
+// lParam is a heap-allocated vector<wstring>*.
+#define WM_APP_LYRICS_TRANSLATED (WM_APP + 4)
+
 int RunGui(HINSTANCE hInstance, int nCmdShow);
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 void CreateHeaderControls(HWND parent, HINSTANCE hInstance);

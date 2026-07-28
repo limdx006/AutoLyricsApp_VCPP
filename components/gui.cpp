@@ -11,6 +11,7 @@
 #include "language_detector.h"
 #include <algorithm>
 #include <atomic>
+#include <thread>
 #include <utility>
 #include <cmath>
 #include <cwctype>
@@ -55,6 +56,9 @@ static bool g_modeIsOriginal = true;
 // Holds the detected language of the currently-loaded lyrics so the
 // "Current:" column can reflect it when toggling between Original/Translated.
 static Language g_lastDetectedLanguage = Language::Unknown;
+
+// Guards against concurrent Python subprocesses for translation.
+static std::atomic<bool> g_translating{ false };
 
 static void UpdatePlayPauseButton(HWND hwnd)
 {
@@ -949,6 +953,36 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             return 0;
         }
 
+        case WM_APP_LYRICS_TRANSLATED:
+        {
+            auto* ptr = reinterpret_cast<vector<wstring>*>(lParam);
+            if (ptr)
+            {
+                if (!ptr->empty())
+                {
+                    lyrics_display::set_translated_texts(std::move(*ptr));
+
+                    // If the user hasn't toggled back to Original in the
+                    // meantime, show the cached translations.
+                    if (!g_modeIsOriginal)
+                    {
+                        lyrics_display::set_show_translated(true);
+                        lyrics_display::set_status(DisplayStatus::None);
+                    }
+                }
+                else
+                {
+                    // Translation returned nothing — clear "Translating..."
+                    // and let the user see the original lyrics.
+                    lyrics_display::set_status(DisplayStatus::None);
+                    if (!g_modeIsOriginal)
+                        lyrics_display::set_show_translated(false);
+                }
+                delete ptr;
+            }
+            return 0;
+        }
+
         case WM_COMMAND:
         {
             // STN_CLICKED and BN_CLICKED are both 0, so this catches clicks from either
@@ -993,6 +1027,46 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                     HWND hModeValue = GetDlgItem(hwnd, ID_STATIC_MODE_VALUE);
                     if (hModeValue && IsWindowVisible(hModeValue))
                     {
+                        bool switchingToTranslated = g_modeIsOriginal; // about to flip
+
+                        if (switchingToTranslated)
+                        {
+                            lyrics_display::set_show_translated(true);
+
+                            // If no cached translation, start one in the background.
+                            if (!lyrics_display::has_translated_texts() && !g_translating.exchange(true))
+                            {
+                                lyrics_display::set_status(DisplayStatus::Translating);
+
+                                // Capture inputs before spawning the thread.
+                                vector<wstring> texts = lyrics_display::get_lyric_texts();
+                                Language currentLang = g_lastDetectedLanguage;
+                                HWND hwndCapture = hwnd;
+
+                                std::thread([texts = std::move(texts), currentLang, hwndCapture]() {
+                                    string langCode;
+                                    switch (currentLang)
+                                    {
+                                        case Language::Japanese: langCode = "ja"; break;
+                                        case Language::Korean:   langCode = "ko"; break;
+                                        case Language::Chinese:  langCode = "zh"; break;
+                                        default:                 langCode = "en"; break;
+                                    }
+
+                                    vector<wstring> translated = translate_lyrics(texts, langCode);
+                                    g_translating = false;
+
+                                    auto* ptr = new vector<wstring>(std::move(translated));
+                                    PostMessageW(hwndCapture, WM_APP_LYRICS_TRANSLATED, 0, (LPARAM)ptr);
+                                }).detach();
+                            }
+                        }
+                        else
+                        {
+                            // Switching back to Original
+                            lyrics_display::set_show_translated(false);
+                        }
+
                         ToggleMode(hwnd);
                         UpdateCurrentValue(hwnd);
                     }
