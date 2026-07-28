@@ -7,6 +7,7 @@
 #define ID_BTN_PTT          101   // Pin-To-Top
 #define ID_BTN_REFRESH       102
 #define ID_BTN_SETTINGS      103
+#define ID_BTN_LOG           126   // Log / diagnostic panel
 #define ID_STATIC_SONG       104
 #define ID_STATIC_ARTIST     105
 #define ID_STATIC_OFFSET_LBL 106

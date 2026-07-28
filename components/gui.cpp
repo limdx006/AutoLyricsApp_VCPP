@@ -42,6 +42,7 @@ static HFONT  g_hFontLang      = nullptr;   // language bar font
 static bool g_hoverPTT      = false;
 static bool g_hoverRefresh  = false;
 static bool g_hoverSettings = false;
+static bool g_hoverLog      = false;
 // Hover state for playback control icons
 static bool g_hoverPrev     = false;
 static bool g_hoverPlayPause = false;
@@ -360,6 +361,16 @@ void CreateHeaderControls(HWND parent, HINSTANCE hInstance)
         parent, (HMENU)ID_BTN_PTT, hInstance, nullptr);
     SendMessageW(hBtnPTT, WM_SETFONT, (WPARAM)g_hFontIcon, TRUE);
     SetWindowSubclass(hBtnPTT, IconHoverSubclassProc, 1, (DWORD_PTR)&g_hoverPTT);
+
+    // Log button, sits in the space reserved by SIDE_RESERVED on the left,
+    // vertically aligned with the pin-to-top star on the right.
+    HWND hBtnLog = CreateWindowW(
+        L"STATIC", L"\U0001F4DD",  // 📝 memo
+        WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY | SS_NOPREFIX,
+        CARD_LEFT + PTT_MARGIN + 4, songY + 4, PTT_SIZE - 8, PTT_SIZE - 8,
+        parent, (HMENU)ID_BTN_LOG, hInstance, nullptr);
+    SendMessageW(hBtnLog, WM_SETFONT, (WPARAM)g_hFontLabel, TRUE);
+    SetWindowSubclass(hBtnLog, IconHoverSubclassProc, 1, (DWORD_PTR)&g_hoverLog);
 
     // Footer row (REF | Offset | ST): each control centers on this shared row line
     int rowCenterY = CARD_TOP + CARD_HEIGHT - FOOTER_ROW_OFFSET_FROM_BOTTOM;
@@ -830,6 +841,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             else if (ctrlId == ID_BTN_REFRESH && g_hoverRefresh)
                 SetTextColor(hdcStatic, APP_COLOR_ICON_HOVER);
             else if (ctrlId == ID_BTN_SETTINGS && g_hoverSettings)
+                SetTextColor(hdcStatic, APP_COLOR_ICON_HOVER);
+            else if (ctrlId == ID_BTN_LOG && g_hoverLog)
                 SetTextColor(hdcStatic, APP_COLOR_ICON_HOVER);
             else if (ctrlId == ID_BTN_PREV && g_hoverPrev)
                 SetTextColor(hdcStatic, APP_COLOR_ICON_HOVER);
