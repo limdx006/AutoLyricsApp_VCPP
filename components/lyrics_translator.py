@@ -82,12 +82,23 @@ def _batch_convert(lines, language):
 
 
 def main():
-    """Read JSON from stdin, write JSON to stdout."""
+    """Read JSON from an env-var-specified file, a file argument, or stdin
+    (in that order of priority).  Write JSON to stdout."""
     sys.stdin.reconfigure(encoding="utf-8")
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
 
-    data = json.load(sys.stdin)
+    import os  # delayed import so the top-level is clean
+
+    input_file = os.environ.get("TRANSLATOR_INPUT_FILE")
+    if input_file:
+        with open(input_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    elif len(sys.argv) > 1:
+        with open(sys.argv[1], "r", encoding="utf-8") as f:
+            data = json.load(f)
+    else:
+        data = json.load(sys.stdin)
     language = data.get("language", "")
     lines = data.get("lines", [])
 

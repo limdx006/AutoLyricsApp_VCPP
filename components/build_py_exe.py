@@ -1,9 +1,9 @@
 import PyInstaller.__main__
+import subprocess
+import sys
 
+# 1. Build the lyrics-fetcher helper
 PyInstaller.__main__.run([
-    # Entry point — lyrics_fetcher.py reads TRACK_TITLE / TRACK_ARTIST from
-    # environment, writes JSON to stdout.  The --console flag keeps the pipe
-    # working (--windowed would break subprocess I/O).
     'components/lyrics_fetcher.py',
     '--onefile',
     '--console',
@@ -13,23 +13,34 @@ PyInstaller.__main__.run([
     # Core dependencies
     '--hidden-import', 'syncedlyrics',
     '--hidden-import', 'flask',
+])
 
-    # ── Romanization (disabled for now; uncomment when translator is ready) ──
-    # --hidden-import cutlet
-    # --hidden-import fugashi
-    # --hidden-import unidic_lite
-    # --hidden-import pypinyin
-    # --hidden-import korean_romanizer
-    # --collect-data unidic_lite
-    # --collect-data fugashi
-    # --collect-data cutlet
-    # --collect-data pypinyin
-    # --collect-data korean_romanizer
-    # --collect-binaries fugashi
-    # --collect-binaries mecab
-    # --collect-submodules unidic_lite
-    # --collect-submodules fugashi
-    # --collect-submodules cutlet
-    # --collect-submodules pypinyin
-    # --collect-submodules korean_romanizer
+# 2. Build the translator / romanization helper
+PyInstaller.__main__.run([
+    'components/lyrics_translator.py',
+    '--onefile',
+    '--console',
+    '--name', 'py_translator',
+    '--distpath', '.',
+
+    # Romanization dependencies
+    '--hidden-import', 'cutlet',
+    '--hidden-import', 'fugashi',
+    '--hidden-import', 'unidic_lite',
+    '--hidden-import', 'pypinyin',
+    '--hidden-import', 'korean_romanizer',
+
+    # Data / binaries that need to be bundled alongside
+    '--collect-data', 'unidic_lite',
+    '--collect-data', 'fugashi',
+    '--collect-data', 'cutlet',
+    '--collect-data', 'pypinyin',
+    '--collect-data', 'korean_romanizer',
+    '--collect-binaries', 'fugashi',
+    '--collect-binaries', 'mecab',
+    '--collect-submodules', 'unidic_lite',
+    '--collect-submodules', 'fugashi',
+    '--collect-submodules', 'cutlet',
+    '--collect-submodules', 'pypinyin',
+    '--collect-submodules', 'korean_romanizer',
 ])

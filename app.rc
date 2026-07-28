@@ -7,6 +7,6 @@ IDI_APP ICON "icon.ico"
 // — extracted to %TEMP%\AutoLyricsApp\ at runtime and invoked directly.
 PY_HELPER RCDATA "py_helper.exe"
 
-// Embedded Python script for romanization (JP→Romaji, KO→Romaji, ZH→PinYin)
-// — not yet linked from C++; kept for future integration.
-// LYRICS_TRANSLATOR RCDATA "components/lyrics_translator.py"
+// Embedded Python translator executable (PyInstaller bundle of
+// lyrics_translator.py) — extracted the same way for romanization.
+PY_TRANSLATOR RCDATA "py_translator.exe"

@@ -46,6 +46,42 @@ static string extract_py_helper()
     return path;
 }
 
+// Same as extract_py_helper() but for the translator/romanization helper.
+static string extract_py_translator()
+{
+    HRSRC hRes = FindResourceW(nullptr, L"PY_TRANSLATOR", (LPCWSTR)RT_RCDATA);
+    if (!hRes) return {};
+
+    HGLOBAL hLoaded = LoadResource(nullptr, hRes);
+    if (!hLoaded) return {};
+
+    void* pData = LockResource(hLoaded);
+    DWORD dwSize = SizeofResource(nullptr, hRes);
+    if (!pData || !dwSize) return {};
+
+    wchar_t tempPath[MAX_PATH];
+    if (!GetTempPathW(MAX_PATH, tempPath))
+        return {};
+
+    wstring exeDir = wstring(tempPath) + L"AutoLyricsApp";
+    wstring exePath = exeDir + L"\\py_translator.exe";
+
+    CreateDirectoryW(exeDir.c_str(), nullptr);
+
+    FILE* f = nullptr;
+    if (_wfopen_s(&f, exePath.c_str(), L"wb") != 0 || !f)
+        return {};
+
+    fwrite(pData, 1, dwSize, f);
+    fclose(f);
+
+    int len = WideCharToMultiByte(CP_UTF8, 0, exePath.c_str(), -1, nullptr, 0, nullptr, nullptr);
+    if (len <= 0) return {};
+    string path(len - 1, 0);
+    WideCharToMultiByte(CP_UTF8, 0, exePath.c_str(), -1, &path[0], len, nullptr, nullptr);
+    return path;
+}
+
 string get_lyrics(const string& title, const string& artist)
 {
     SetEnvironmentVariableW(L"TRACK_TITLE", utf8_to_wide(title).c_str());
@@ -181,9 +217,17 @@ vector<wstring> translate_lyrics(const vector<wstring>& texts, const string& lan
         fclose(f);
     }
 
-    // ── Invoke translator with stdin redirected from the temp file ──
+    // ── Invoke translator with the temp file path via env var ──
+    // Passing it as a command-line argument triggers cmd.exe /S /c outer-
+    // quote stripping which leaves stray " inside the middle of paths.
+    // An environment variable avoids shell parsing altogether.
     const string tempFileUtf8 = wide_to_utf8(tempFile);
-    const string command = "python components/lyrics_translator.py < \"" + tempFileUtf8 + "\"";
+    SetEnvironmentVariableW(L"TRANSLATOR_INPUT_FILE", tempFile);
+
+    string translatorPath = extract_py_translator();
+    const string command = translatorPath.empty()
+        ? "python \"components/lyrics_translator.py\""
+        : "\"" + translatorPath + "\"";
 
     array<char, 4096> buffer;
     string rawOutput;
