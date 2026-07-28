@@ -8,79 +8,142 @@
 
 using json = nlohmann::json;
 
-// Extracts the embedded py_helper.exe to %TEMP%\AutoLyricsApp\ and returns
-// the absolute path, or an empty string on failure (caller may fall back
-// to running the .py file directly for development convenience).
+// ── Subprocess runner (no console window) ──
+
+// Runs a command line via CreateProcessW with CREATE_NO_WINDOW so no
+// terminal flashes for the child.  Captures both stdout and stderr into the
+// returned string.  Returns empty string on failure.
+static string run_no_window(const wstring& command)
+{
+    string result;
+    SECURITY_ATTRIBUTES sa = {};
+    sa.nLength = sizeof(sa);
+    sa.bInheritHandle = TRUE;
+    sa.lpSecurityDescriptor = nullptr;
+
+    HANDLE hRead, hWrite;
+    if (!CreatePipe(&hRead, &hWrite, &sa, 0))
+        return result;
+
+    // Read end is NOT inherited — only the write end goes to the child.
+    if (!SetHandleInformation(hRead, HANDLE_FLAG_INHERIT, 0))
+    {
+        CloseHandle(hRead);
+        CloseHandle(hWrite);
+        return result;
+    }
+
+    PROCESS_INFORMATION pi = {};
+    STARTUPINFOW si = {};
+    si.cb = sizeof(si);
+    si.dwFlags = STARTF_USESTDHANDLES;
+    si.hStdOutput = hWrite;
+    si.hStdError  = hWrite;   // stderr → same pipe as stdout
+
+    // Provide a null stdin pipe so the child doesn't inherit an invalid
+    // handle (parent is a GUI app with no console handles).
+    HANDLE hStdinRead, hStdinWrite;
+    if (!CreatePipe(&hStdinRead, &hStdinWrite, &sa, 0))
+    {
+        CloseHandle(hRead);
+        CloseHandle(hWrite);
+        return result;
+    }
+    CloseHandle(hStdinWrite); // write end closed — child gets EOF on stdin
+    si.hStdInput = hStdinRead;
+
+    // Build a writable command line (CreateProcessW modifies it in place).
+    wstring mutableCmd = command;
+
+    if (!CreateProcessW(
+            nullptr,              // app name (use command line)
+            &mutableCmd[0],       // command line
+            nullptr,              // process attributes
+            nullptr,              // thread attributes
+            TRUE,                 // inherit handles (needed for the pipe)
+            CREATE_NO_WINDOW,     // no console window for the child
+            nullptr,              // environment (inherit parent's)
+            nullptr,              // current directory (inherit parent's)
+            &si,
+            &pi))
+    {
+        CloseHandle(hRead);
+        CloseHandle(hWrite);
+        CloseHandle(hStdinRead);
+        return result;
+    }
+
+    // The write end is owned by the child now — close ours so ReadFile
+    // doesn't hang waiting for more data after the child exits.
+    CloseHandle(hWrite);
+    CloseHandle(hStdinRead);  // stdin read end owned by the child
+
+    char buf[4096];
+    DWORD bytesRead;
+    while (ReadFile(hRead, buf, sizeof(buf) - 1, &bytesRead, nullptr) && bytesRead > 0)
+    {
+        buf[bytesRead] = '\0';
+        result += buf;
+    }
+
+    WaitForSingleObject(pi.hProcess, INFINITE);
+
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+    CloseHandle(hRead);
+    return result;
+}
+
+// ── Embedded resource extraction ──
+
+// Extracts a named RCDATA resource to %TEMP%\AutoLyricsApp\<fileName> and
+// returns the absolute path (empty string on failure).
+static string extract_resource(const wchar_t* resName, const wchar_t* fileName)
+{
+    HRSRC hRes = FindResourceW(nullptr, resName, (LPCWSTR)RT_RCDATA);
+    if (!hRes) return {};
+
+    HGLOBAL hLoaded = LoadResource(nullptr, hRes);
+    if (!hLoaded) return {};
+
+    void* pData = LockResource(hLoaded);
+    DWORD dwSize = SizeofResource(nullptr, hRes);
+    if (!pData || !dwSize) return {};
+
+    wchar_t tempPath[MAX_PATH];
+    if (!GetTempPathW(MAX_PATH, tempPath))
+        return {};
+
+    wstring exeDir = wstring(tempPath) + L"AutoLyricsApp";
+    wstring exePath = exeDir + L"\\" + fileName;
+
+    CreateDirectoryW(exeDir.c_str(), nullptr);
+
+    FILE* f = nullptr;
+    if (_wfopen_s(&f, exePath.c_str(), L"wb") != 0 || !f)
+        return {};
+
+    fwrite(pData, 1, dwSize, f);
+    fclose(f);
+
+    int len = WideCharToMultiByte(CP_UTF8, 0, exePath.c_str(), -1, nullptr, 0, nullptr, nullptr);
+    if (len <= 0) return {};
+    string path(len - 1, 0);
+    WideCharToMultiByte(CP_UTF8, 0, exePath.c_str(), -1, &path[0], len, nullptr, nullptr);
+    return path;
+}
+
 static string extract_py_helper()
 {
-    HRSRC hRes = FindResourceW(nullptr, L"PY_HELPER", (LPCWSTR)RT_RCDATA);
-    if (!hRes) return {};
-
-    HGLOBAL hLoaded = LoadResource(nullptr, hRes);
-    if (!hLoaded) return {};
-
-    void* pData = LockResource(hLoaded);
-    DWORD dwSize = SizeofResource(nullptr, hRes);
-    if (!pData || !dwSize) return {};
-
-    wchar_t tempPath[MAX_PATH];
-    if (!GetTempPathW(MAX_PATH, tempPath))
-        return {};
-
-    wstring exeDir = wstring(tempPath) + L"AutoLyricsApp";
-    wstring exePath = exeDir + L"\\py_helper.exe";
-
-    CreateDirectoryW(exeDir.c_str(), nullptr);
-
-    FILE* f = nullptr;
-    if (_wfopen_s(&f, exePath.c_str(), L"wb") != 0 || !f)
-        return {};
-
-    fwrite(pData, 1, dwSize, f);
-    fclose(f);
-
-    int len = WideCharToMultiByte(CP_UTF8, 0, exePath.c_str(), -1, nullptr, 0, nullptr, nullptr);
-    if (len <= 0) return {};
-    string path(len - 1, 0);
-    WideCharToMultiByte(CP_UTF8, 0, exePath.c_str(), -1, &path[0], len, nullptr, nullptr);
-    return path;
+    return extract_resource(L"PY_HELPER", L"py_helper.exe");
 }
 
-// Same as extract_py_helper() but for the translator/romanization helper.
 static string extract_py_translator()
 {
-    HRSRC hRes = FindResourceW(nullptr, L"PY_TRANSLATOR", (LPCWSTR)RT_RCDATA);
-    if (!hRes) return {};
-
-    HGLOBAL hLoaded = LoadResource(nullptr, hRes);
-    if (!hLoaded) return {};
-
-    void* pData = LockResource(hLoaded);
-    DWORD dwSize = SizeofResource(nullptr, hRes);
-    if (!pData || !dwSize) return {};
-
-    wchar_t tempPath[MAX_PATH];
-    if (!GetTempPathW(MAX_PATH, tempPath))
-        return {};
-
-    wstring exeDir = wstring(tempPath) + L"AutoLyricsApp";
-    wstring exePath = exeDir + L"\\py_translator.exe";
-
-    CreateDirectoryW(exeDir.c_str(), nullptr);
-
-    FILE* f = nullptr;
-    if (_wfopen_s(&f, exePath.c_str(), L"wb") != 0 || !f)
-        return {};
-
-    fwrite(pData, 1, dwSize, f);
-    fclose(f);
-
-    int len = WideCharToMultiByte(CP_UTF8, 0, exePath.c_str(), -1, nullptr, 0, nullptr, nullptr);
-    if (len <= 0) return {};
-    string path(len - 1, 0);
-    WideCharToMultiByte(CP_UTF8, 0, exePath.c_str(), -1, &path[0], len, nullptr, nullptr);
-    return path;
+    return extract_resource(L"PY_TRANSLATOR", L"py_translator.exe");
 }
+
+// ── Lyrics fetching ──
 
 string get_lyrics(const string& title, const string& artist)
 {
@@ -90,28 +153,20 @@ string get_lyrics(const string& title, const string& artist)
     // Try the self-contained exe first; fall back to running the .py file
     // directly (useful during development before the exe has been rebuilt).
     string helperPath = extract_py_helper();
-    string command;
+    wstring command;
     if (!helperPath.empty())
     {
-        command = "\"" + helperPath + "\"";
+        command = L"\"" + utf8_to_wide(helperPath) + L"\"";
     }
     else
     {
-        command = "python \"components/lyrics_fetcher.py\"";
+        command = L"python \"components/lyrics_fetcher.py\"";
     }
 
-    array<char, 256> buffer;
-    string result;
-
-    FILE* pipe = _popen(command.c_str(), "r");
-    if (!pipe) return "";
-
-    while (fgets(buffer.data(), buffer.size(), pipe))
-        result += buffer.data();
-
-    _pclose(pipe);
-    return result;
+    return run_no_window(command);
 }
+
+// ── LRC parsing ──
 
 // Splits raw LRC text (one "[mm:ss.cc] line text" per line, plus possible
 // non-timed metadata lines like "[ar:...]") into sorted, timestamped lines.
@@ -182,6 +237,8 @@ LyricsResult fetch_lyrics(const string& title, const string& artist)
     return result;
 }
 
+// ── Translation / romanization ──
+
 vector<wstring> translate_lyrics(const vector<wstring>& texts, const string& langCode)
 {
     vector<wstring> result;
@@ -221,25 +278,20 @@ vector<wstring> translate_lyrics(const vector<wstring>& texts, const string& lan
     // Passing it as a command-line argument triggers cmd.exe /S /c outer-
     // quote stripping which leaves stray " inside the middle of paths.
     // An environment variable avoids shell parsing altogether.
-    const string tempFileUtf8 = wide_to_utf8(tempFile);
     SetEnvironmentVariableW(L"TRANSLATOR_INPUT_FILE", tempFile);
 
     string translatorPath = extract_py_translator();
-    const string command = translatorPath.empty()
-        ? "python \"components/lyrics_translator.py\""
-        : "\"" + translatorPath + "\"";
-
-    array<char, 4096> buffer;
-    string rawOutput;
-    FILE* pipe = _popen(command.c_str(), "r");
-    if (!pipe)
+    wstring command;
+    if (!translatorPath.empty())
     {
-        DeleteFileW(tempFile);
-        return result;
+        command = L"\"" + utf8_to_wide(translatorPath) + L"\"";
     }
-    while (fgets(buffer.data(), buffer.size(), pipe))
-        rawOutput += buffer.data();
-    _pclose(pipe);
+    else
+    {
+        command = L"python \"components/lyrics_translator.py\"";
+    }
+
+    string rawOutput = run_no_window(command);
     DeleteFileW(tempFile);
 
     // ── Parse JSON response ──

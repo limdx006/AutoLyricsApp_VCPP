@@ -9,7 +9,7 @@ echo Done.
 
 rc app.rc
 
-cl /EHsc /std:c++20 /Fo"obj\\" /Fd"obj\\" main.cpp components\*.cpp /I"components" /I"vcpkg\installed\x64-windows\include" app.res /link user32.lib gdi32.lib comctl32.lib runtimeobject.lib windowsapp.lib
+cl /EHsc /std:c++20 /Fo"obj\\" /Fd"obj\\" main.cpp components\*.cpp /I"components" /I"vcpkg\installed\x64-windows\include" app.res /link /SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup user32.lib gdi32.lib comctl32.lib runtimeobject.lib windowsapp.lib
 
 del app.res
 
