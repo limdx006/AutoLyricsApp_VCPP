@@ -2,10 +2,9 @@
 
 #include "common.h"
 #include "config.h"
+#include "local_timer.h"
 
 namespace timeline_tracker {
-    constexpr UINT TIMELINE_UPDATE_INTERVAL_MS = 500;
-
     void initialize(HWND hwnd, HINSTANCE hInstance);
     void cleanup();
     void refresh_from_media();

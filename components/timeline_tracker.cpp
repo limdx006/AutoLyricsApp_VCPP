@@ -1,6 +1,5 @@
 #include "timeline_tracker.h"
 #include "media_session.h"
-#include "time_formatter.h"
 #include "gui.h"
 #include "lyrics_display.h"
 #include <algorithm>
@@ -10,12 +9,6 @@
 
 namespace timeline_tracker {
     static HWND g_hwnd = nullptr;
-    static HINSTANCE g_hInstance = nullptr;
-    static double g_current_position_seconds = 0.0;
-    static double g_duration_seconds = 0.0;
-    static bool g_is_playing = false;
-    static bool g_has_valid_position = false;
-    static ULONGLONG g_last_update_tick = 0;
     static double g_last_window_position_seconds = -1.0;
     static bool g_has_window_position = false;
     static wstring g_current_title;
@@ -23,116 +16,23 @@ namespace timeline_tracker {
     static string g_last_lyrics_title;  // title/artist of the last song lyrics were fetched for
     static string g_last_lyrics_artist;
     static std::atomic<bool> g_lyrics_fetching{false};  // guard against concurrent Python subprocesses
-    static HANDLE g_hTimerQueue = nullptr;  // high-resolution timer queue
-    static HANDLE g_hTimer = nullptr;
-
-    // Callback from the high-resolution timer queue — runs on a thread pool
-    // thread, not the UI thread.  Post a message so handle_timer runs on the
-    // UI thread.
-    static void CALLBACK timer_queue_callback(PVOID, BOOLEAN)
-    {
-        if (g_hwnd)
-            PostMessageW(g_hwnd, WM_APP_TIMELINE_TICK, 0, 0);
-    }
-
-    static void update_controls()
-    {
-        if (g_hwnd == nullptr)
-            return;
-
-        std::string currentTimeText = format_display_time(g_current_position_seconds);
-        std::string endTimeText = format_display_time(g_duration_seconds);
-        CURRENT_TIME = std::wstring(currentTimeText.begin(), currentTimeText.end());
-        END_TIME = std::wstring(endTimeText.begin(), endTimeText.end());
-
-        // Cache child HWNDs on first use so GetDlgItem (O(n) in child count)
-        // doesn't run every tick.
-        static HWND s_hCurrTime = nullptr;
-        static HWND s_hEndTime  = nullptr;
-        static HWND s_hSong     = nullptr;
-        static HWND s_hArtist   = nullptr;
-        if (!s_hCurrTime)
-        {
-            s_hCurrTime = GetDlgItem(g_hwnd, ID_STATIC_CURR_TIME);
-            s_hEndTime  = GetDlgItem(g_hwnd, ID_STATIC_END_TIME);
-            s_hSong     = GetDlgItem(g_hwnd, ID_STATIC_SONG);
-            s_hArtist   = GetDlgItem(g_hwnd, ID_STATIC_ARTIST);
-        }
-
-        // Only touch the control (and repaint) if its text actually changed
-        auto setIfChanged = [](HWND ctrl, const wstring& newText) -> bool
-        {
-            if (!ctrl) return false;
-            int len = GetWindowTextLengthW(ctrl);
-            wstring current(len, L'\0');
-            if (len > 0)
-                GetWindowTextW(ctrl, &current[0], len + 1);
-            if (current != newText)
-            {
-                SetWindowTextW(ctrl, newText.c_str());
-                return true;
-            }
-            return false;
-        };
-
-        setIfChanged(s_hCurrTime, CURRENT_TIME);
-        setIfChanged(s_hEndTime, END_TIME);
-        bool titleChanged = setIfChanged(s_hSong, g_current_title);
-        setIfChanged(s_hArtist, g_current_artist);
-
-        // New song -> re-measure and resize the header box for it
-        if (titleChanged)
-            RefreshHeaderText(g_hwnd, g_current_title);
-
-        // Invalidate (not RDW_UPDATENOW) so the progress bar updates without forcing a synchronous repaint
-        if (g_hwnd)
-            InvalidateRect(g_hwnd, nullptr, FALSE);
-    }
 
     void initialize(HWND hwnd, HINSTANCE hInstance)
     {
         g_hwnd = hwnd;
-        g_hInstance = hInstance;
-        g_has_valid_position = false;
-        g_last_update_tick = GetTickCount64();
         g_last_window_position_seconds = -1.0;
         g_has_window_position = false;
         g_current_title.clear();
         g_current_artist.clear();
 
+        local_timer::initialize(hwnd, hInstance);
         refresh_from_media();
-
-        // Create a high-resolution timer queue (runs callback on thread pool,
-        // avoiding WM_TIMER's low-priority coalescing and ~16ms granularity).
-        g_hTimerQueue = CreateTimerQueue();
-        if (g_hTimerQueue)
-        {
-            CreateTimerQueueTimer(&g_hTimer, g_hTimerQueue,
-                                  timer_queue_callback, nullptr,
-                                  TIMELINE_UPDATE_INTERVAL_MS,  // due time
-                                  TIMELINE_UPDATE_INTERVAL_MS,  // period
-                                  WT_EXECUTELONGFUNCTION);      // allow >10ms callbacks
-        }
     }
 
     void cleanup()
     {
-        if (g_hTimer)
-        {
-            DeleteTimerQueueTimer(g_hTimerQueue, g_hTimer, INVALID_HANDLE_VALUE);
-            g_hTimer = nullptr;
-        }
-        if (g_hTimerQueue)
-        {
-            DeleteTimerQueueEx(g_hTimerQueue, INVALID_HANDLE_VALUE);
-            g_hTimerQueue = nullptr;
-        }
-
-        if (g_hwnd != nullptr)
-        {
-            g_hwnd = nullptr;
-            g_hInstance = nullptr;
-        }
+        local_timer::cleanup();
+        g_hwnd = nullptr;
         g_lyrics_fetching = false;
     }
 
@@ -212,20 +112,14 @@ namespace timeline_tracker {
             const double seek_delta = std::abs(window_position - g_last_window_position_seconds);
             if (seek_delta < 1.0)  // normal inter-tick drift (~0.5 s) + small margin
             {
-                g_duration_seconds = window_duration;
-                g_is_playing = media.is_playing;
-                g_has_valid_position = true;
+                local_timer::apply_session(-1.0, window_duration, media.is_playing);
                 return false;
             }
         }
 
-        g_current_position_seconds = window_position;
-        g_duration_seconds = window_duration;
-        g_is_playing = media.is_playing;
-        g_has_valid_position = true;
+        local_timer::apply_session(window_position, window_duration, media.is_playing);
         g_last_window_position_seconds = window_position;
         g_has_window_position = true;
-        g_last_update_tick = GetTickCount64();
         g_current_title = media.title.empty() ? wstring(L"Unknown Title") : utf8_to_wide(media.title);
         g_current_artist = media.artist.empty() ? wstring(L"Unknown Artist") : utf8_to_wide(media.artist);
         return true;
@@ -237,25 +131,25 @@ namespace timeline_tracker {
         if (!media.is_success)
         {
             lyrics_display::set_status(DisplayStatus::NoMedia);
+            local_timer::set_valid_position(false);
             return;
         }
 
         // Clear the no-media banner now that a session exists.
         lyrics_display::set_status(DisplayStatus::None);
 
-        apply_media_state(media, true);  // force_position = from WinRT
-        updateTimelineDisplay();
-        lyrics_display::sync(g_current_position_seconds);
+        apply_media_state(media, true);
+        local_timer::update_display();
     }
 
     double get_current_position_seconds()
     {
-        return g_current_position_seconds;
+        return local_timer::get_position_seconds();
     }
 
     double get_duration_seconds()
     {
-        return g_duration_seconds;
+        return local_timer::get_duration_seconds();
     }
 
     wstring get_current_title()
@@ -276,78 +170,30 @@ namespace timeline_tracker {
 
     void updateTimelineDisplay()
     {
-        if (!g_has_valid_position)
-            return;
-
-        update_controls();
+        local_timer::update_display();
     }
 
     void handle_timer()
     {
-        if (!g_has_valid_position)
-            return;
+        // ── Priority 2: Local interpolation ──
+        local_timer::interpolate();
 
-        const ULONGLONG now = GetTickCount64();
-        const double elapsed = static_cast<double>(now - g_last_update_tick) / 1000.0;
-        if (elapsed <= 0.0)
-            return;
-
-        // Diagnostic: log the actual interval between handle_timer calls
-        static ULONGLONG s_last_call_tick = 0;
-        if (s_last_call_tick == 0)
-            s_last_call_tick = now;
-        const double call_interval = static_cast<double>(now - s_last_call_tick) / 1000.0;
-        s_last_call_tick = now;
-        // printf("[TICK] call_interval=%.3fs elapsed=%.3fs pos=%.3f\n", call_interval, elapsed, g_current_position_seconds);
-
-        // 1. Local interpolation — advance the clock by wall-clock time so
-        //    the displayed time ticks forward smoothly each tick (~500 ms).
-        if (g_is_playing)
+        // ── Priority 1: WinRT session update ──
+        MediaSessionInfo media = get_media_session_info();
+        if (media.is_success)
         {
-            g_current_position_seconds += elapsed;
-            if (g_duration_seconds > 0.0)
-                g_current_position_seconds = (std::min)(g_current_position_seconds, g_duration_seconds);
-        }
+            apply_media_state(media, false);
 
-        // 2. Local interpolation alone is accurate enough for the display
-        //    between WinRT queries, so throttle the blocking WinRT call
-        //    (~10-50 ms) to every 4th tick (~2 s) instead of every tick.
-        //    The call is still responsive enough for seek/song detection.
-        static int s_skip = 0;
-        if (++s_skip >= 4)
-        {
-            s_skip = 0;
-
-            MediaSessionInfo media = get_media_session_info();
-            if (media.is_success)
-            {
-                // force_position = false — the interpolated position
-                // survives during normal playback; only genuine seeks
-                // trigger a WinRT overwrite.
-                apply_media_state(media, false);
-
-                // Regardless of whether the position was overwritten,
-                // keep g_last_window_position_seconds in sync with the
-                // latest WinRT sample so the seek-detection delta doesn't
-                // accumulate across multiple throttled ticks.
+            // Keep the seek-detection anchor in sync even when the
+            // position wasn't overwritten.
+            if (g_has_window_position)
                 g_last_window_position_seconds = (std::max)(0.0, media.position);
 
-                // Ensure title/artist always match the current session.
-                g_current_title = utf8_to_wide(media.title.empty() ? string("Unknown Title") : media.title);
-                g_current_artist = utf8_to_wide(media.artist.empty() ? string("Unknown Artist") : media.artist);
-            }
+            // Ensure title/artist always match the current session.
+            g_current_title = utf8_to_wide(media.title.empty() ? string("Unknown Title") : media.title);
+            g_current_artist = utf8_to_wide(media.artist.empty() ? string("Unknown Artist") : media.artist);
         }
 
-        // 3. Reset tick clock using the start-of-tick time so the next
-        //    call's elapsed measures the full wall-clock interval — not
-        //    minus the processing time of this call — avoiding cumulative
-        //    drift.
-        g_last_update_tick = now;
-        update_controls();
-
-        // Sync lyrics with the final (interpolated or seek-corrected)
-        // position immediately, so the lyric line change is as tight as
-        // possible to the audio.
-        lyrics_display::sync(g_current_position_seconds);
+        local_timer::update_display();
     }
 }
