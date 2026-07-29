@@ -62,6 +62,15 @@ static Language g_lastDetectedLanguage = Language::Unknown;
 // Guards against concurrent Python subprocesses for translation.
 static std::atomic<bool> g_translating{ false };
 
+// Mode toggle animation state
+static constexpr UINT_PTR TIMER_ID_MODE_ANIM = 3;
+static constexpr int MODE_TOGGLE_DURATION_MS = 200;
+static HWND g_hModeToggle = nullptr;
+static bool g_modeAnimating = false;
+static ULONGLONG g_modeAnimStart = 0;
+static float g_modeAnimFrom = 0.0f; // 0 = Original (top), 1 = Translated (bottom)
+static float g_modeAnimTo = 0.0f;
+
 static void UpdatePlayPauseButton(HWND hwnd)
 {
     HWND hBtn = GetDlgItem(hwnd, ID_BTN_PLAY_PAUSE);
@@ -195,6 +204,169 @@ LRESULT CALLBACK OffsetEditSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
         RemoveWindowSubclass(hwnd, OffsetEditSubclassProc, uIdSubclass);
     }
 
+    return DefSubclassProc(hwnd, msg, wParam, lParam);
+}
+
+// Forward declarations
+static void UpdateCurrentValue(HWND hwnd);
+
+// ── Mode toggle (vertical segmented switch) ──
+
+static void HandleModeToggleAnim()
+{
+    HWND hToggle = g_hModeToggle;
+    if (!hToggle) return;
+
+    if (!g_modeAnimating)
+    {
+        KillTimer(g_mainHwnd.load(), TIMER_ID_MODE_ANIM);
+        return;
+    }
+
+    ULONGLONG elapsed = GetTickCount64() - g_modeAnimStart;
+    if (elapsed >= MODE_TOGGLE_DURATION_MS)
+    {
+        g_modeAnimating = false;
+        KillTimer(g_mainHwnd.load(), TIMER_ID_MODE_ANIM);
+    }
+    InvalidateRect(hToggle, nullptr, TRUE);
+}
+
+static float GetModeTogglePos()
+{
+    if (g_modeAnimating)
+    {
+        ULONGLONG elapsed = GetTickCount64() - g_modeAnimStart;
+        float raw = (std::min)(1.0f, (float)elapsed / MODE_TOGGLE_DURATION_MS);
+        float t = 1.0f - std::pow(1.0f - raw, 3.0f);
+        return g_modeAnimFrom + (g_modeAnimTo - g_modeAnimFrom) * t;
+    }
+    return g_modeIsOriginal ? 0.0f : 1.0f;
+}
+
+LRESULT CALLBACK ModeToggleSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam,
+                                         UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
+{
+    switch (msg)
+    {
+        case WM_NCDESTROY:
+            g_hModeToggle = nullptr;
+            RemoveWindowSubclass(hwnd, ModeToggleSubclassProc, uIdSubclass);
+            break;
+
+        case WM_LBUTTONUP:
+        {
+            if (IsWindowVisible(hwnd))
+            {
+                bool switchingToTranslated = g_modeIsOriginal;
+
+                if (switchingToTranslated)
+                {
+                    lyrics_display::set_show_translated(true);
+
+                    if (!lyrics_display::has_translated_texts() && !g_translating.exchange(true))
+                    {
+                        lyrics_display::set_status(DisplayStatus::Translating);
+
+                        vector<wstring> texts = lyrics_display::get_lyric_texts();
+                        Language currentLang = g_lastDetectedLanguage;
+                        HWND hwndCapture = g_mainHwnd.load();
+
+                        std::thread([texts = std::move(texts), currentLang, hwndCapture]() {
+                            string langCode;
+                            switch (currentLang)
+                            {
+                                case Language::Japanese: langCode = "ja"; break;
+                                case Language::Korean:   langCode = "ko"; break;
+                                case Language::Chinese:  langCode = "zh"; break;
+                                default:                 langCode = "en"; break;
+                            }
+                            vector<wstring> translated = translate_lyrics(texts, langCode);
+                            g_translating = false;
+                            auto* ptr = new vector<wstring>(std::move(translated));
+                            PostMessageW(hwndCapture, WM_APP_LYRICS_TRANSLATED, 0, (LPARAM)ptr);
+                        }).detach();
+                    }
+                }
+                else
+                {
+                    lyrics_display::set_show_translated(false);
+                }
+
+                g_modeAnimFrom = g_modeIsOriginal ? 0.0f : 1.0f;
+                g_modeAnimTo = g_modeIsOriginal ? 1.0f : 0.0f;
+                g_modeIsOriginal = !g_modeIsOriginal;
+                g_modeAnimating = true;
+                g_modeAnimStart = GetTickCount64();
+                SetTimer(g_mainHwnd.load(), TIMER_ID_MODE_ANIM, 16, nullptr);
+
+                HWND parent = GetParent(hwnd);
+                if (parent) UpdateCurrentValue(parent);
+            }
+            return 0;
+        }
+
+        case WM_PAINT:
+        {
+            PAINTSTRUCT ps;
+            HDC hdc = BeginPaint(hwnd, &ps);
+
+            RECT rc;
+            GetClientRect(hwnd, &rc);
+            int w = rc.right - rc.left;
+            int h = rc.bottom - rc.top;
+
+            // Container background
+            HBRUSH bgBrush = CreateSolidBrush(RGB(0x0f, 0x1a, 0x33));
+            HPEN nullPen = (HPEN)GetStockObject(NULL_PEN);
+            HPEN oldPen = (HPEN)SelectObject(hdc, nullPen);
+            HBRUSH oldBrush = (HBRUSH)SelectObject(hdc, bgBrush);
+            RoundRect(hdc, 0, 0, w, h, 8, 8);
+            SelectObject(hdc, oldBrush);
+            DeleteObject(bgBrush);
+
+            // Subtle border
+            HPEN borderPen = CreatePen(PS_SOLID, 1, RGB(0x2a, 0x35, 0x50));
+            HBRUSH borderBrush = CreateSolidBrush(RGB(0x2a, 0x35, 0x50));
+            oldPen = (HPEN)SelectObject(hdc, borderPen);
+            oldBrush = (HBRUSH)SelectObject(hdc, borderBrush);
+            FrameRect(hdc, &rc, borderBrush);
+            SelectObject(hdc, oldBrush);
+            SelectObject(hdc, oldPen);
+            DeleteObject(borderBrush);
+            DeleteObject(borderPen);
+
+            // Sliding highlight
+            float pos = GetModeTogglePos();
+            int halfH = h / 2;
+            int hlY = (int)(pos * (h - halfH));
+            HBRUSH hlBrush = CreateSolidBrush(RGB(0xff, 0x8c, 0x00));
+            SelectObject(hdc, nullPen);
+            oldBrush = (HBRUSH)SelectObject(hdc, hlBrush);
+            RoundRect(hdc, 2, hlY + 2, w - 2, hlY + halfH - 2, 6, 6);
+            SelectObject(hdc, oldBrush);
+            DeleteObject(hlBrush);
+
+            // Text
+            HFONT oldFont = (HFONT)SelectObject(hdc, g_hFontLang);
+            SetBkMode(hdc, TRANSPARENT);
+
+            RECT topRc = { 0, 0, w, halfH };
+            RECT botRc = { 0, halfH, w, h };
+
+            SetTextColor(hdc, pos < 0.5f ? RGB(0xff, 0xff, 0xff) : RGB(0x80, 0x80, 0x90));
+            DrawTextW(hdc, L"Original", -1, &topRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+
+            SetTextColor(hdc, pos >= 0.5f ? RGB(0xff, 0xff, 0xff) : RGB(0x80, 0x80, 0x90));
+            DrawTextW(hdc, L"Translated", -1, &botRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+
+            SelectObject(hdc, oldFont);
+            SelectObject(hdc, oldPen);
+
+            EndPaint(hwnd, &ps);
+            return 0;
+        }
+    }
     return DefSubclassProc(hwnd, msg, wParam, lParam);
 }
 
@@ -484,21 +656,20 @@ void CreateLanguageBarControls(HWND parent, HINSTANCE hInstance)
         parent, (HMENU)ID_STATIC_CURRENT_VALUE, hInstance, nullptr);
     SendMessageW(hCurrentValue, WM_SETFONT, (WPARAM)g_hFontLang, TRUE);
 
-    // --- Column 3: Mode ---
+    // --- Column 3: Mode toggle ---
     int col3X = CARD_LEFT + (colWidth * 2);
-    HWND hModeLabel = CreateWindowW(
-        L"STATIC", MODE_LABEL_TEXT,
-        WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY | SS_NOPREFIX,
-        col3X, row1Y, colWidth, textHeight,
-        parent, (HMENU)ID_STATIC_MODE_LABEL, hInstance, nullptr);
-    SendMessageW(hModeLabel, WM_SETFONT, (WPARAM)g_hFontLang, TRUE);
+    int toggleW = 80;
+    int toggleH = 36;
+    int toggleX = col3X + (colWidth - toggleW) / 2;
+    int toggleY = LANG_BAR_TOP + (LANG_BAR_HEIGHT - toggleH) / 2;
 
-    HWND hModeValue = CreateWindowW(
-        L"STATIC", MODE_VALUE_TEXT,
-        WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY | SS_NOPREFIX,
-        col3X, row2Y, colWidth, textHeight,
-        parent, (HMENU)ID_STATIC_MODE_VALUE, hInstance, nullptr);
-    SendMessageW(hModeValue, WM_SETFONT, (WPARAM)g_hFontLang, TRUE);
+    g_hModeToggle = CreateWindowW(
+        L"STATIC", nullptr,
+        WS_CHILD | WS_VISIBLE | SS_NOTIFY | SS_NOPREFIX,
+        toggleX, toggleY, toggleW, toggleH,
+        parent, (HMENU)ID_STATIC_MODE_TOGGLE, hInstance, nullptr);
+    SendMessageW(g_hModeToggle, WM_SETFONT, (WPARAM)g_hFontLang, TRUE);
+    SetWindowSubclass(g_hModeToggle, ModeToggleSubclassProc, 1, 0);
 }
 
 void CreateLyricsAreaControls(HWND parent, HINSTANCE hInstance)
@@ -596,22 +767,32 @@ void TogglePlayPause(HWND hwnd)
 
 void ToggleMode(HWND hwnd)
 {
+    g_modeAnimFrom = g_modeIsOriginal ? 0.0f : 1.0f;
+    g_modeAnimTo = g_modeIsOriginal ? 1.0f : 0.0f;
     g_modeIsOriginal = !g_modeIsOriginal;
-    // Repaint both mode static controls so WM_CTLCOLORSTATIC picks up the change.
-    HWND hLabel = GetDlgItem(hwnd, ID_STATIC_MODE_LABEL);
-    HWND hValue = GetDlgItem(hwnd, ID_STATIC_MODE_VALUE);
-    if (hLabel) InvalidateRect(hLabel, nullptr, TRUE);
-    if (hValue) InvalidateRect(hValue, nullptr, TRUE);
+    g_modeAnimating = true;
+    g_modeAnimStart = GetTickCount64();
+    SetTimer(g_mainHwnd.load(), TIMER_ID_MODE_ANIM, 16, nullptr);
+    if (g_hModeToggle)
+        InvalidateRect(g_hModeToggle, nullptr, TRUE);
 }
 
 void ResetModeToOriginal(HWND hwnd)
 {
+    if (g_modeIsOriginal)
+    {
+        if (g_hModeToggle)
+            InvalidateRect(g_hModeToggle, nullptr, TRUE);
+        return;
+    }
+    g_modeAnimFrom = 1.0f;
+    g_modeAnimTo = 0.0f;
     g_modeIsOriginal = true;
-    // Repaint both mode controls so WM_CTLCOLORSTATIC picks up the reset.
-    HWND hLabel = GetDlgItem(hwnd, ID_STATIC_MODE_LABEL);
-    HWND hValue = GetDlgItem(hwnd, ID_STATIC_MODE_VALUE);
-    if (hLabel) InvalidateRect(hLabel, nullptr, TRUE);
-    if (hValue) InvalidateRect(hValue, nullptr, TRUE);
+    g_modeAnimating = true;
+    g_modeAnimStart = GetTickCount64();
+    SetTimer(g_mainHwnd.load(), TIMER_ID_MODE_ANIM, 16, nullptr);
+    if (g_hModeToggle)
+        InvalidateRect(g_hModeToggle, nullptr, TRUE);
 }
 
 // Updates ID_STATIC_CURRENT_VALUE based on the detected language and mode.
@@ -855,17 +1036,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 SetTextColor(hdcStatic, APP_COLOR_ARTIST_TEXT);
             else if (ctrlId == ID_BTN_PREV || ctrlId == ID_BTN_PLAY_PAUSE || ctrlId == ID_BTN_NEXT)
                 SetTextColor(hdcStatic, APP_COLOR_LIGHT_TEXT);
-            // Language bar: labels use light text, values use artist text; mode controls toggle between highlighted and dim.
+            // Language bar: labels use light text, values use artist text.
             else if (ctrlId == ID_STATIC_LANG_LABEL ||
                      ctrlId == ID_STATIC_CURRENT_LABEL)
                 SetTextColor(hdcStatic, APP_COLOR_LIGHT_TEXT);
             else if (ctrlId == ID_STATIC_LANG_VALUE ||
                      ctrlId == ID_STATIC_CURRENT_VALUE)
                 SetTextColor(hdcStatic, APP_COLOR_ARTIST_TEXT);
-            else if (ctrlId == ID_STATIC_MODE_LABEL)
-                SetTextColor(hdcStatic, g_modeIsOriginal ? RGB(0xff, 0x8c, 0x00) : APP_COLOR_ARTIST_TEXT);
-            else if (ctrlId == ID_STATIC_MODE_VALUE)
-                SetTextColor(hdcStatic, g_modeIsOriginal ? APP_COLOR_ARTIST_TEXT : RGB(0xff, 0x8c, 0x00));
             else
                 SetTextColor(hdcStatic, APP_COLOR_LIGHT_TEXT);
 
@@ -880,7 +1057,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             // Language bar controls sit on the same card-colored background
             if (ctrlId == ID_STATIC_LANG_LABEL || ctrlId == ID_STATIC_LANG_VALUE ||
                 ctrlId == ID_STATIC_CURRENT_LABEL || ctrlId == ID_STATIC_CURRENT_VALUE ||
-                ctrlId == ID_STATIC_MODE_LABEL || ctrlId == ID_STATIC_MODE_VALUE)
+                ctrlId == ID_STATIC_MODE_TOGGLE)
             {
                 return (LRESULT)g_hbrCard;
             }
@@ -902,6 +1079,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             if (wParam == lyrics_display::TIMER_ID_LYRICS_ANIM)
             {
                 lyrics_display::handle_anim_timer();
+            }
+            else if (wParam == TIMER_ID_MODE_ANIM)
+            {
+                HandleModeToggleAnim();
             }
             return 0;
         }
@@ -936,10 +1117,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 if (hCurrentValue)
                     SetWindowTextW(hCurrentValue, L"Unknown");
 
-                HWND hModeValue = GetDlgItem(hwnd, ID_STATIC_MODE_VALUE);
-                if (hModeValue)
+                if (g_hModeToggle)
                 {
-                    ShowWindow(hModeValue, SW_HIDE);
+                    ShowWindow(g_hModeToggle, SW_HIDE);
                     if (!g_modeIsOriginal)
                         ToggleMode(hwnd);
                 }
@@ -968,19 +1148,18 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 // Sync "Current:" with the new language
                 UpdateCurrentValue(hwnd);
 
-                // English songs don't need translation — hide mode value and lock to Original.
-                HWND hModeValue = GetDlgItem(hwnd, ID_STATIC_MODE_VALUE);
-                if (hModeValue)
+                // English songs don't need translation — hide toggle and lock to Original.
+                if (g_hModeToggle)
                 {
                     if (lang == Language::English)
                     {
-                        ShowWindow(hModeValue, SW_HIDE);
+                        ShowWindow(g_hModeToggle, SW_HIDE);
                         if (!g_modeIsOriginal)
                             ToggleMode(hwnd);
                     }
                     else
                     {
-                        ShowWindow(hModeValue, SW_SHOW);
+                        ShowWindow(g_hModeToggle, SW_SHOW);
                     }
                 }
 
@@ -1059,58 +1238,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                     log_viewer::toggle_window(hwnd);
                     break;
 
-                case ID_STATIC_MODE_LABEL:
-                case ID_STATIC_MODE_VALUE:
-                {
-                    // Don't toggle when Translated is hidden (English songs).
-                    HWND hModeValue = GetDlgItem(hwnd, ID_STATIC_MODE_VALUE);
-                    if (hModeValue && IsWindowVisible(hModeValue))
-                    {
-                        bool switchingToTranslated = g_modeIsOriginal; // about to flip
-
-                        if (switchingToTranslated)
-                        {
-                            lyrics_display::set_show_translated(true);
-
-                            // If no cached translation, start one in the background.
-                            if (!lyrics_display::has_translated_texts() && !g_translating.exchange(true))
-                            {
-                                lyrics_display::set_status(DisplayStatus::Translating);
-
-                                // Capture inputs before spawning the thread.
-                                vector<wstring> texts = lyrics_display::get_lyric_texts();
-                                Language currentLang = g_lastDetectedLanguage;
-                                HWND hwndCapture = hwnd;
-
-                                std::thread([texts = std::move(texts), currentLang, hwndCapture]() {
-                                    string langCode;
-                                    switch (currentLang)
-                                    {
-                                        case Language::Japanese: langCode = "ja"; break;
-                                        case Language::Korean:   langCode = "ko"; break;
-                                        case Language::Chinese:  langCode = "zh"; break;
-                                        default:                 langCode = "en"; break;
-                                    }
-
-                                    vector<wstring> translated = translate_lyrics(texts, langCode);
-                                    g_translating = false;
-
-                                    auto* ptr = new vector<wstring>(std::move(translated));
-                                    PostMessageW(hwndCapture, WM_APP_LYRICS_TRANSLATED, 0, (LPARAM)ptr);
-                                }).detach();
-                            }
-                        }
-                        else
-                        {
-                            // Switching back to Original
-                            lyrics_display::set_show_translated(false);
-                        }
-
-                        ToggleMode(hwnd);
-                        UpdateCurrentValue(hwnd);
-                    }
+                case ID_STATIC_MODE_TOGGLE:
+                    // Click handled in ModeToggleSubclassProc WM_LBUTTONUP
                     break;
-                }
 
                 case ID_BTN_PREV:
                 case ID_BTN_NEXT:
@@ -1122,6 +1252,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         }
 
         case WM_DESTROY:
+            KillTimer(hwnd, TIMER_ID_MODE_ANIM);
             timeline_tracker::cleanup();
             lyrics_display::cleanup();
             log_viewer::cleanup();

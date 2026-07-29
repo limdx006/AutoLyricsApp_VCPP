@@ -28,8 +28,7 @@
 #define ID_STATIC_LANG_VALUE     117
 #define ID_STATIC_CURRENT_LABEL  118
 #define ID_STATIC_CURRENT_VALUE  119
-#define ID_STATIC_MODE_LABEL     120
-#define ID_STATIC_MODE_VALUE     121
+#define ID_STATIC_MODE_TOGGLE    120
 
 // Lyrics area controls (reserved for future use)
 #define ID_LYRICS_CONTAINER      122
@@ -141,5 +140,3 @@ extern const wchar_t* const LANG_LABEL_TEXT;
 extern const wchar_t* const LANG_VALUE_TEXT;
 extern const wchar_t* const CURRENT_LABEL_TEXT;
 extern const wchar_t* const CURRENT_VALUE_TEXT;
-extern const wchar_t* const MODE_LABEL_TEXT;
-extern const wchar_t* const MODE_VALUE_TEXT;
