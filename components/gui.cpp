@@ -640,27 +640,11 @@ void CreateLanguageBarControls(HWND parent, HINSTANCE hInstance)
         parent, (HMENU)ID_STATIC_LANG_VALUE, hInstance, nullptr);
     SendMessageW(hLangValue, WM_SETFONT, (WPARAM)g_hFontLang, TRUE);
 
-    // --- Column 2: Current ---
+    // --- Column 2: Mode toggle ---
     int col2X = CARD_LEFT + colWidth;
-    HWND hCurrentLabel = CreateWindowW(
-        L"STATIC", CURRENT_LABEL_TEXT,
-        WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOPREFIX,
-        col2X, row1Y, colWidth, textHeight,
-        parent, (HMENU)ID_STATIC_CURRENT_LABEL, hInstance, nullptr);
-    SendMessageW(hCurrentLabel, WM_SETFONT, (WPARAM)g_hFontLang, TRUE);
-
-    HWND hCurrentValue = CreateWindowW(
-        L"STATIC", CURRENT_VALUE_TEXT,
-        WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOPREFIX,
-        col2X, row2Y, colWidth, textHeight,
-        parent, (HMENU)ID_STATIC_CURRENT_VALUE, hInstance, nullptr);
-    SendMessageW(hCurrentValue, WM_SETFONT, (WPARAM)g_hFontLang, TRUE);
-
-    // --- Column 3: Mode toggle ---
-    int col3X = CARD_LEFT + (colWidth * 2);
     int toggleW = 80;
     int toggleH = 36;
-    int toggleX = col3X + (colWidth - toggleW) / 2;
+    int toggleX = col2X + (colWidth - toggleW) / 2;
     int toggleY = LANG_BAR_TOP + (LANG_BAR_HEIGHT - toggleH) / 2;
 
     g_hModeToggle = CreateWindowW(
@@ -670,6 +654,22 @@ void CreateLanguageBarControls(HWND parent, HINSTANCE hInstance)
         parent, (HMENU)ID_STATIC_MODE_TOGGLE, hInstance, nullptr);
     SendMessageW(g_hModeToggle, WM_SETFONT, (WPARAM)g_hFontLang, TRUE);
     SetWindowSubclass(g_hModeToggle, ModeToggleSubclassProc, 1, 0);
+
+    // --- Column 3: Current ---
+    int col3X = CARD_LEFT + (colWidth * 2);
+    HWND hCurrentLabel = CreateWindowW(
+        L"STATIC", CURRENT_LABEL_TEXT,
+        WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOPREFIX,
+        col3X, row1Y, colWidth, textHeight,
+        parent, (HMENU)ID_STATIC_CURRENT_LABEL, hInstance, nullptr);
+    SendMessageW(hCurrentLabel, WM_SETFONT, (WPARAM)g_hFontLang, TRUE);
+
+    HWND hCurrentValue = CreateWindowW(
+        L"STATIC", CURRENT_VALUE_TEXT,
+        WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOPREFIX,
+        col3X, row2Y, colWidth, textHeight,
+        parent, (HMENU)ID_STATIC_CURRENT_VALUE, hInstance, nullptr);
+    SendMessageW(hCurrentValue, WM_SETFONT, (WPARAM)g_hFontLang, TRUE);
 }
 
 void CreateLyricsAreaControls(HWND parent, HINSTANCE hInstance)
