@@ -6,7 +6,9 @@ Windows desktop C++ app for synced lyrics display using the Win32 API and Window
 
 - Real-time synchronized lyrics display with smooth slide animation
 - Auto-detect language (English, Chinese, Japanese, Korean) from lyric text
-- Mode toggle (Original / Translated) — "Current:" shows Romaji/PinYin dynamically
+- Animated vertical mode toggle (Original / Translated) — iPhone-style segmented switch with smooth slide animation
+- Language bar with three columns: Language | Toggle | Current
+  - "Current:" shows Romaji/PinYin dynamically in Translated mode
 - Multi-session media detection — automatically selects the best media session from all active sources (Spotify, Chrome, etc.)
 - Offset adjustment (buttons ±0.1 or direct edit, range ±9.9 s, default +1.0 s)
 - Media playback controls (play/pause, next, previous)
