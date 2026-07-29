@@ -23,7 +23,6 @@ int main() {
     if (!media.is_success)
         log_viewer::log("Warning: No media session active.\n");
 
-    log_viewer::log("Launching GUI...\n");
     int guiExitCode = RunGui(GetModuleHandle(nullptr), SW_SHOWNORMAL);
     log_viewer::log("GUI exit code: %d\n", guiExitCode);
 
