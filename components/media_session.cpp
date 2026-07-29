@@ -1,5 +1,6 @@
 #include "media_session.h"
 #include "time_formatter.h"
+#include "log_viewer.h"
 
 
 MediaSessionInfo get_media_session_info()

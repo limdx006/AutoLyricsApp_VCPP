@@ -1,12 +1,15 @@
 #include "timeline_tracker.h"
 #include "media_session.h"
+#include "media_selector.h"
 #include "gui.h"
 #include "log_viewer.h"
 #include "lyrics_display.h"
+#include "lyrics_fetcher.h"
 #include <algorithm>
-#include <atomic>
 #include <chrono>
 #include <thread>
+#include <utility>
+#include <vector>
 
 namespace timeline_tracker {
     static HWND g_hwnd = nullptr;
@@ -16,7 +19,6 @@ namespace timeline_tracker {
     static wstring g_current_artist;
     static string g_last_lyrics_title;  // title/artist of the last song lyrics were fetched for
     static string g_last_lyrics_artist;
-    static std::atomic<bool> g_lyrics_fetching{false};  // guard against concurrent Python subprocesses
 
     void initialize(HWND hwnd, HINSTANCE hInstance)
     {
@@ -34,7 +36,6 @@ namespace timeline_tracker {
     {
         local_timer::cleanup();
         g_hwnd = nullptr;
-        g_lyrics_fetching = false;
     }
 
     // Returns true when the position actually changed (seek / new song) so the
@@ -69,17 +70,16 @@ namespace timeline_tracker {
             string artist = media.artist;
             HWND hwnd = g_hwnd;
 
-            // Atomically claim the fetch slot to prevent multiple concurrent
-            // Python subprocesses (each ~30-50 MB RSS) when the user skips
-            // songs rapidly.  If a fetch is already in flight, skip this
-            // song change; the next one will pick up the new title.
-            if (g_lyrics_fetching.exchange(true))
+            // Per-song guard: allow concurrent fetches for different songs
+            // so we can probe multiple sessions simultaneously.
+            if (!media_selector::try_claim_fetch(title, artist))
                 return false;
 
             std::thread([title, artist, hwnd]() {
                 log_viewer::log("[FETCH] Fetching lyrics for: %s - %s\n", title.c_str(), artist.c_str());
                 LyricsResult result = fetch_lyrics(title, artist);
-                g_lyrics_fetching = false;
+                media_selector::release_fetch(title, artist);
+                media_selector::cache_probe_result(title, artist, result.success);
                 if (result.success)
                 {
                     log_viewer::log("[FETCH] Lyrics found (%zu lines)\n", result.lines.size());
@@ -128,7 +128,7 @@ namespace timeline_tracker {
 
     void refresh_from_media()
     {
-        MediaSessionInfo media = get_media_session_info();
+        MediaSessionInfo media = media_selector::get_best_session();
         if (!media.is_success)
         {
             lyrics_display::set_status(DisplayStatus::NoMedia);
@@ -174,13 +174,55 @@ namespace timeline_tracker {
         local_timer::update_display();
     }
 
+    // Probes all secondary sessions (those NOT currently displayed) in the
+    // background to discover whether they have synced lyrics.  The probe
+    // results feed into the selector's cache so subsequent scoring rounds
+    // can apply the lyrics-found bonus / no-lyrics penalty.
+    static void probe_secondary_sessions(
+        const std::vector<std::pair<string, string>>& all_sessions,
+        const string& primary_title,
+        const string& primary_artist)
+    {
+        for (const auto& pair : all_sessions)
+        {
+            const string& title  = pair.first;
+            const string& artist = pair.second;
+
+            // Skip the primary session — it is already fetched by
+            // apply_media_state() above.
+            if (title == primary_title && artist == primary_artist)
+                continue;
+
+            if (title.empty())
+                continue;
+
+            if (!media_selector::try_claim_fetch(title, artist))
+                continue;   // already in flight or already cached
+
+            HWND hwnd = g_hwnd;
+            std::thread([title, artist, hwnd]() {
+                LyricsResult result = fetch_lyrics(title, artist);
+                media_selector::release_fetch(title, artist);
+                media_selector::cache_probe_result(title, artist, result.success);
+
+                if (result.success)
+                {
+                    log_viewer::log("[PROBE] Lyrics found for secondary: %s - %s\n",
+                                    title.c_str(), artist.c_str());
+                }
+            }).detach();
+        }
+    }
+
     void handle_timer()
     {
         // ── Priority 2: Local interpolation ──
         local_timer::interpolate();
 
-        // ── Priority 1: WinRT session update ──
-        MediaSessionInfo media = get_media_session_info();
+        // ── Priority 1: Select best session via media_selector ──
+        std::vector<std::pair<string, string>> all_sessions;
+        MediaSessionInfo media = media_selector::get_best_session(&all_sessions);
+
         if (media.is_success)
         {
             apply_media_state(media, false);
@@ -193,6 +235,9 @@ namespace timeline_tracker {
             // Ensure title/artist always match the current session.
             g_current_title = utf8_to_wide(media.title.empty() ? string("Unknown Title") : media.title);
             g_current_artist = utf8_to_wide(media.artist.empty() ? string("Unknown Artist") : media.artist);
+
+            // ── Background probes for other sessions ──
+            probe_secondary_sessions(all_sessions, media.title, media.artist);
         }
 
         local_timer::update_display();

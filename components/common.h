@@ -8,6 +8,7 @@
 #include <winrt/base.h>
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.Media.Control.h>
+#include <winrt/Windows.Foundation.Collections.h>
 
 using std::string;
 using std::wstring;
