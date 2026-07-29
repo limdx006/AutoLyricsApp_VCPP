@@ -5,14 +5,13 @@
 void auto_nudge(float sleep_delay)
 {
     int attempts = 0;
+    const int maxAttempts = 5;
 
     using playback_controls::PlaybackAction;
 
     const bool was_playing = playback_controls::is_playing();
 
-
-    // Only nudge (brief pause/resume) when media is actively playing.
-    // If already paused, do nothing — otherwise we'd resume playback.
+    // Only nudge (brief pause/resume) when media is actively playing; if paused, do nothing.
     if (!was_playing)
         return;
 
@@ -27,6 +26,6 @@ void auto_nudge(float sleep_delay)
         Sleep(2000);
         attempts++;
 
-    } while(!was_playing);
+    } while (!playback_controls::is_playing() && attempts < maxAttempts);
     log_viewer::log("[NUDGE] Auto nudge success in: %d\n", attempts);
 }

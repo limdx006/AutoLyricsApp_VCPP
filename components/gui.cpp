@@ -671,8 +671,7 @@ void HandlePlaybackAction(HWND hwnd, int controlId)
 void SubmitLyrics(vector<LyricLine> lines)
 {
     HWND hwnd = g_mainHwnd.load();
-    // The background fetch normally finishes well after the window is
-    // created, but wait briefly just in case it races window creation.
+    // Wait briefly for window creation in case of race condition.
     for (int i = 0; i < 200 && !hwnd; ++i)
     {
         Sleep(10);
@@ -700,9 +699,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             CreateLyricsAreaControls(hwnd, hInstance);
             CreateBottomControls(hwnd, hInstance);
 
-            // Sync the play/pause button with the actual media state.
-            // CreateBottomControls defaults to "Playing", which is wrong
-            // when media is paused at startup.
+            // Sync play/pause button with actual media state (CreateBottomControls defaults to Playing).
             if (!playback_controls::is_playing())
             {
                 g_isPlaying = false;
@@ -712,7 +709,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             return 0;
         }
 
-        // No-op: WM_PAINT below fills the whole client area itself (double-buffered), so skip the default erase to avoid flicker
+        // No-op: WM_PAINT fills client area (double-buffered), skip default erase to avoid flicker
         case WM_ERASEBKGND:
             return 1;
 
@@ -728,7 +725,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             HBITMAP memBitmap = CreateCompatibleBitmap(screenDc, clientRect.right, clientRect.bottom);
             HBITMAP oldMemBitmap = (HBITMAP)SelectObject(hdc, memBitmap);
 
-            // Fill the client area since WM_ERASEBKGND is now a no-op
+            // Fill client area since WM_ERASEBKGND is now a no-op
             FillRect(hdc, &clientRect, g_hbrBackground);
 
             // --- Header card ---
@@ -858,8 +855,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 SetTextColor(hdcStatic, APP_COLOR_ARTIST_TEXT);
             else if (ctrlId == ID_BTN_PREV || ctrlId == ID_BTN_PLAY_PAUSE || ctrlId == ID_BTN_NEXT)
                 SetTextColor(hdcStatic, APP_COLOR_LIGHT_TEXT);
-            // Language bar: labels use light text, values use artist (grey) text
-            // Mode controls toggle between highlighted and dim based on selection.
+            // Language bar: labels use light text, values use artist text; mode controls toggle between highlighted and dim.
             else if (ctrlId == ID_STATIC_LANG_LABEL ||
                      ctrlId == ID_STATIC_CURRENT_LABEL)
                 SetTextColor(hdcStatic, APP_COLOR_LIGHT_TEXT);
@@ -873,7 +869,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             else
                 SetTextColor(hdcStatic, APP_COLOR_LIGHT_TEXT);
 
-            // Bottom card controls use background brush; header card and language bar controls use card brush
+            // Controls use background brush; header and language bar controls use card brush.
             if (ctrlId == ID_STATIC_CURR_TIME || ctrlId == ID_STATIC_END_TIME ||
                 ctrlId == ID_STATIC_STATUS || ctrlId == ID_BTN_PREV ||
                 ctrlId == ID_BTN_PLAY_PAUSE || ctrlId == ID_BTN_NEXT)
@@ -972,8 +968,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 // Sync "Current:" with the new language
                 UpdateCurrentValue(hwnd);
 
-                // English songs don't need translation — hide the mode
-                // value (Translated) and lock to Original.
+                // English songs don't need translation — hide mode value and lock to Original.
                 HWND hModeValue = GetDlgItem(hwnd, ID_STATIC_MODE_VALUE);
                 if (hModeValue)
                 {
@@ -1004,8 +999,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 {
                     lyrics_display::set_translated_texts(std::move(*ptr));
 
-                    // If the user hasn't toggled back to Original in the
-                    // meantime, show the cached translations.
+                    // If user hasn't toggled back to Original, show cached translations.
                     if (!g_modeIsOriginal)
                     {
                         lyrics_display::set_show_translated(true);
@@ -1014,8 +1008,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 }
                 else
                 {
-                    // Translation returned nothing — clear "Translating..."
-                    // and let the user see the original lyrics.
+                    // Translation returned nothing — clear "Translating..." and show original lyrics.
                     lyrics_display::set_status(DisplayStatus::None);
                     if (!g_modeIsOriginal)
                         lyrics_display::set_show_translated(false);
