@@ -913,6 +913,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         case WM_APP_TIMELINE_TICK:
         {
             timeline_tracker::handle_timer();
+            // Sync play/pause button with the actual media session state
+            // (e.g., when paused/resumed from an external app).
+            g_isPlaying = playback_controls::is_playing();
+            UpdatePlayPauseButton(hwnd);
             // lyrics_display::sync() is called inside handle_timer
             return 0;
         }
