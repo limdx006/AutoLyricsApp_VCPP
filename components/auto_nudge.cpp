@@ -23,7 +23,7 @@ void auto_nudge(float sleep_delay)
             Sleep(static_cast<DWORD>(sleep_delay * 1000.0));
 
         playback_controls::send_action(PlaybackAction::PlayPause);
-        Sleep(2000);
+        Sleep(500);
         attempts++;
 
     } while (!playback_controls::is_playing() && attempts < maxAttempts);

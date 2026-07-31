@@ -20,7 +20,7 @@ def main():
     
     for attempt in range(MAX_ATTEMPT):
         try:
-            lyrics = syncedlyrics.search(query)
+            lyrics = syncedlyrics.search(query, synced_only = True)
             print(json.dumps({
                 "success": True,
                 "title": title,
