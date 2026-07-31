@@ -1,3 +1,14 @@
+"""
+@misc{syncedlyrics,
+  author = {Momeni, Mohammad},
+  title = {syncedlyrics},
+  year = {2022},
+  publisher = {GitHub},
+  journal = {GitHub repository},
+  howpublished = {\url{https://github.com/moehmeni/syncedlyrics}},
+}
+"""
+
 import os
 import sys
 import time
@@ -16,7 +27,7 @@ def main():
         print("")
         return
 
-    query = f"{title} {artist}"
+    query = f"[{title}] [{artist}]"
     
     for attempt in range(MAX_ATTEMPT):
         try:
