@@ -1,4 +1,4 @@
-"""
+r"""
 @misc{syncedlyrics,
   author = {Momeni, Mohammad},
   title = {syncedlyrics},
@@ -31,7 +31,7 @@ def main():
     
     for attempt in range(MAX_ATTEMPT):
         try:
-            lyrics = syncedlyrics.search(query, synced_only = True)
+            lyrics = syncedlyrics.search(query)
             print(json.dumps({
                 "success": True,
                 "title": title,

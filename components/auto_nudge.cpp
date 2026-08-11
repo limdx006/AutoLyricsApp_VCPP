@@ -27,5 +27,8 @@ void auto_nudge(float sleep_delay)
         attempts++;
 
     } while (!playback_controls::is_playing() && attempts < maxAttempts);
-    log_viewer::log("[NUDGE] Auto nudge success in: %d\n", attempts);
+    if (attempts >= maxAttempts)
+        log_viewer::log("[NUDGE] Auto nudge failed after %d attempts\n", attempts);
+    else
+        log_viewer::log("[NUDGE] Auto nudge success in: %d\n", attempts);
 }

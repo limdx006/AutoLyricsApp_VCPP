@@ -70,14 +70,13 @@ namespace timeline_tracker {
             string artist = media.artist;
             HWND hwnd = g_hwnd;
 
-            // Per-song guard: allow concurrent fetches for different songs
-            // so we can probe multiple sessions simultaneously.
-            if (!media_selector::try_claim_fetch(title, artist))
-                return false;
-
+            // Primary fetch: always attempt to retrieve lyrics for the current song,
+            // regardless of any existing fetch claim (e.g., from a background probe).
+            // Background probes will still respect the claim guard.
             std::thread([title, artist, hwnd]() {
                 log_viewer::log("[FETCH] Fetching lyrics for: %s - %s\n", title.c_str(), artist.c_str());
                 LyricsResult result = fetch_lyrics(title, artist);
+                // Release any claim if present (no‑op if none).
                 media_selector::release_fetch(title, artist);
                 media_selector::cache_probe_result(title, artist, result.success);
                 if (result.success)
