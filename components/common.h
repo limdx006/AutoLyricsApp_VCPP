@@ -4,7 +4,6 @@
 #include <string>
 #include <vector>
 #include <array>
-#include <mutex>
 #include <windows.h>
 #include <winrt/base.h>
 #include <winrt/Windows.Foundation.h>

@@ -213,9 +213,9 @@ namespace media_selector {
     static constexpr int LYRICS_FOUND_BONUS   = 60;
     static constexpr int LYRICS_MISSING_PENALTY = 40;
 
-    static int lyrics_probe_delta(const string& title, const string& artist, bool use_cache, vector<string>& reasons)
+    static int lyrics_probe_delta(const string& title, const string& artist,  vector<string>& reasons)
     {
-        if (!use_cache || title.empty()) return 0;
+        if (title.empty()) return 0;
 
         SongKey key{ title, artist };
         std::lock_guard<std::mutex> lock(s_probe_mutex);
@@ -262,8 +262,7 @@ namespace media_selector {
         bool is_playing,
         bool is_paused,
         bool position_moving,
-        double duration,
-        bool use_lyrics_cache)
+        double duration)
     {
         ScoredSession s;
         s.app_id        = app_id;
@@ -355,7 +354,7 @@ namespace media_selector {
         s.score += title_music_delta(title, r);
 
         // Lyrics probe (cached result)
-        s.score += lyrics_probe_delta(title, artist, use_lyrics_cache, r);
+        s.score += lyrics_probe_delta(title, artist, r);
 
         // Duration filter: skip very short clips (< 10 s) and penalise
         // non-music long-form content (> 10 min).
@@ -427,8 +426,7 @@ namespace media_selector {
 
     //  get_best_session — main entry point
     MediaSessionInfo get_best_session(
-        std::vector<std::pair<string, string>>* all_sessions,
-        bool use_lyrics_cache)
+        std::vector<std::pair<string, string>>* all_sessions)
     {
         // Enumerate WinRT sessions 
 
@@ -504,7 +502,7 @@ namespace media_selector {
                 // Score
                 ScoredSession ss = rate_session(
                     appId, title, artist, album,
-                    hasThumb, isPlaying, isPaused, moving, dur, use_lyrics_cache);
+                    hasThumb, isPlaying, isPaused, moving, dur);
                 ss.position = pos;
                 ss.duration = dur;
 
@@ -592,7 +590,7 @@ namespace media_selector {
     {
         s_debug = true;
         s_dirty = true;
-        get_best_session(nullptr, true);
+        get_best_session();
         s_debug = false;
     }
 }
