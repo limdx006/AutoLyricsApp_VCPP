@@ -19,8 +19,11 @@ namespace media_selector {
     // Enumerate all active media sessions, score each, and return the best.
     // If all_sessions is provided it is filled with (title, artist) pairs
     // for every active session so the caller can schedule background probes.
+    // When use_lyrics_cache is false, cached lyrics probe results are ignored
+    // so the initial selection is based on metadata only.
     MediaSessionInfo get_best_session(
-        std::vector<std::pair<string, string>>* all_sessions = nullptr);
+        std::vector<std::pair<string, string>>* all_sessions = nullptr,
+        bool use_lyrics_cache = true);
 
     // Log the full scoring breakdown for all sessions to the log viewer.
     void log_session_details();

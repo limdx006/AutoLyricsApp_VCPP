@@ -20,6 +20,24 @@ namespace timeline_tracker {
     static string g_last_lyrics_title;  // title/artist of the last song lyrics were fetched for
     static string g_last_lyrics_artist;
 
+    // Primary-fetch state tracking to avoid wasted secondary probes and
+    // to prevent the primary "NoLyrics" status from overwriting lyrics
+    // found by a secondary probe.
+    static std::mutex g_primary_state_mutex;
+    static bool g_primary_fetch_pending = false;
+    static bool g_primary_has_lyrics = false;
+    static bool g_any_lyrics_found = false;
+    static bool g_force_no_cache = false;
+
+    static void reset_primary_state()
+    {
+        std::lock_guard<std::mutex> lock(g_primary_state_mutex);
+        g_primary_fetch_pending = false;
+        g_primary_has_lyrics = false;
+        g_any_lyrics_found = false;
+        g_force_no_cache = false;
+    }
+
     void initialize(HWND hwnd, HINSTANCE hInstance)
     {
         g_hwnd = hwnd;
@@ -27,6 +45,7 @@ namespace timeline_tracker {
         g_has_window_position = false;
         g_current_title.clear();
         g_current_artist.clear();
+        reset_primary_state();
 
         local_timer::initialize(hwnd, hInstance);
         refresh_from_media();
@@ -47,6 +66,15 @@ namespace timeline_tracker {
         {
             g_last_lyrics_title = media.title;
             g_last_lyrics_artist = media.artist;
+
+            // Reset primary state for the new song.
+            {
+                std::lock_guard<std::mutex> lock(g_primary_state_mutex);
+                g_primary_fetch_pending = true;
+                g_primary_has_lyrics = false;
+                g_any_lyrics_found = false;
+                g_force_no_cache = true;
+            }
 
             // Clear the previous song's lyrics and reset offset right away.
             lyrics_display::set_lines({});
@@ -81,13 +109,32 @@ namespace timeline_tracker {
                 media_selector::cache_probe_result(title, artist, result.success);
                 if (result.success)
                 {
+                    {
+                        std::lock_guard<std::mutex> lock(g_primary_state_mutex);
+                        g_primary_fetch_pending = false;
+                        g_primary_has_lyrics = true;
+                        g_any_lyrics_found = true;
+                    }
                     log_viewer::log("[FETCH] Lyrics found (%zu lines)\n", result.lines.size());
                     SubmitLyrics(result.lines);
                 }
                 else
                 {
+                    {
+                        std::lock_guard<std::mutex> lock(g_primary_state_mutex);
+                        g_primary_fetch_pending = false;
+                        g_primary_has_lyrics = false;
+                    }
                     log_viewer::log("[FETCH] No synced lyrics found.\n");
-                    if (hwnd)
+                    // Brief delay to allow secondary probes to complete and
+                    // set the lyrics-found flag before showing NoLyrics.
+                    Sleep(300);
+                    bool should_post = false;
+                    {
+                        std::lock_guard<std::mutex> lock(g_primary_state_mutex);
+                        should_post = !g_any_lyrics_found;
+                    }
+                    if (should_post && hwnd)
                         PostMessageW(hwnd, WM_APP_LYRICS_STATUS, (WPARAM)DisplayStatus::NoLyrics, 0);
                 }
             }).detach();
@@ -127,6 +174,7 @@ namespace timeline_tracker {
 
     void refresh_from_media()
     {
+        reset_primary_state();
         MediaSessionInfo media = media_selector::get_best_session();
         if (!media.is_success)
         {
@@ -182,6 +230,17 @@ namespace timeline_tracker {
         const string& primary_title,
         const string& primary_artist)
     {
+        // Skip secondary probes while the primary fetch is in flight or
+        // the primary already has lyrics — no point searching others if
+        // the main media already has the answer.
+        bool should_probe = false;
+        {
+            std::lock_guard<std::mutex> lock(g_primary_state_mutex);
+            should_probe = !g_primary_fetch_pending && !g_primary_has_lyrics;
+        }
+        if (!should_probe)
+            return;
+
         for (const auto& pair : all_sessions)
         {
             const string& title  = pair.first;
@@ -208,6 +267,11 @@ namespace timeline_tracker {
                 {
                     log_viewer::log("[PROBE] Lyrics found for secondary: %s - %s\n",
                                     title.c_str(), artist.c_str());
+                    {
+                        std::lock_guard<std::mutex> lock(g_primary_state_mutex);
+                        g_any_lyrics_found = true;
+                    }
+                    SubmitLyrics(result.lines);
                 }
             }).detach();
         }
@@ -219,8 +283,19 @@ namespace timeline_tracker {
         local_timer::interpolate();
 
         // ── Priority 1: Select best session via media_selector ──
+        // Use lyrics cache only after the primary fetch has completed and
+        // no new song was just detected.  While a fetch is in flight (or a
+        // new song was just detected), score by metadata only so the
+        // initial pick is based on music-likeness, not stale probe results.
+        bool use_lyrics_cache = false;
+        {
+            std::lock_guard<std::mutex> lock(g_primary_state_mutex);
+            use_lyrics_cache = !g_primary_fetch_pending && !g_force_no_cache;
+            g_force_no_cache = false;
+        }
+
         std::vector<std::pair<string, string>> all_sessions;
-        MediaSessionInfo media = media_selector::get_best_session(&all_sessions);
+        MediaSessionInfo media = media_selector::get_best_session(&all_sessions, use_lyrics_cache);
 
         if (media.is_success)
         {
@@ -236,6 +311,8 @@ namespace timeline_tracker {
             g_current_artist = utf8_to_wide(media.artist.empty() ? string("Unknown Artist") : media.artist);
 
             // ── Background probes for other sessions ──
+            // Only probe secondary sessions if the primary has no lyrics
+            // and is not currently being fetched.
             probe_secondary_sessions(all_sessions, media.title, media.artist);
         }
 
