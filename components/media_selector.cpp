@@ -68,17 +68,10 @@ namespace media_selector {
     static std::unordered_set<string> s_fetching_songs;
     static std::mutex s_fetch_mutex;
 
-    // State
+    // State 
     static bool s_debug = false;
     static int  s_current_score = 0;
     static bool s_dirty = true;
-
-    // s_first_pass: on the first call after a song change, score purely by
-    // metadata (ignore probe cache).  After the primary lyrics fetch completes
-    // the flag is reset so subsequent calls incorporate probe results.
-    // This ensures the best session is selected before any lyrics search
-    // influences the scoring, and then re-scored once lyrics are found.
-    static bool s_first_pass = true;
 
     //  String helpers
     static string to_lower(const string& s)
@@ -223,12 +216,6 @@ namespace media_selector {
     static int lyrics_probe_delta(const string& title, const string& artist,  vector<string>& reasons)
     {
         if (title.empty()) return 0;
-
-        // During the initial metadata-only pass, ignore the probe cache so
-        // that old "no lyrics" results from previous songs don't bias the
-        // session selection.  After the primary fetch completes the flag is
-        // reset and subsequent calls will use the cache.
-        if (s_first_pass) return 0;
 
         SongKey key{ title, artist };
         std::lock_guard<std::mutex> lock(s_probe_mutex);
@@ -435,16 +422,6 @@ namespace media_selector {
             s_probe_cache[key] = found ? 1 : 0;
         }
         s_dirty = true;   // trigger re-score on next poll
-    }
-
-    // Called after the primary lyrics fetch completes.  Resets the first-pass
-    // flag so subsequent calls to get_best_session() incorporate probe cache
-    // results into the scoring.  Also clears s_dirty since we are about to
-    // trigger a fresh scoring pass below (avoid double-trigger from here).
-    void finalize_primary_fetch()
-    {
-        s_first_pass = false;
-        s_dirty = true;
     }
 
     //  get_best_session — main entry point

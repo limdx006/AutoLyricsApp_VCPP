@@ -43,9 +43,4 @@ namespace media_selector {
     // Store a probe result in the internal cache so subsequent scoring
     // rounds can apply the lyrics-found bonus or no-lyrics penalty.
     void cache_probe_result(const string& title, const string& artist, bool found);
-
-    // Call after the primary lyrics fetch completes (success or failure).
-    // Resets the first-pass metadata-only flag so probe cache results are
-    // incorporated into subsequent scoring passes.
-    void finalize_primary_fetch();
 }
