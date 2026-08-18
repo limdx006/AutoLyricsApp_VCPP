@@ -45,6 +45,12 @@ namespace timeline_tracker {
         // Detect a song change by title/artist rather than position
         if (!media.title.empty() && (media.title != g_last_lyrics_title || media.artist != g_last_lyrics_artist))
         {
+            // Match the Python app's behavior: the selector must be invalidated
+            // whenever the active song changes so the next poll forces a full re-score.
+            // The probe cache itself is NOT cleared — it persists per (title, artist) pair
+            // so repeated songs get cached results and new songs have no cached penalty yet.
+            media_selector::invalidate();
+
             g_last_lyrics_title = media.title;
             g_last_lyrics_artist = media.artist;
 

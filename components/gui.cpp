@@ -7,6 +7,7 @@
 
 #include "gui.h"
 #include "timeline_tracker.h"
+#include "media_selector.h"
 #include "lyrics_display.h"
 #include "language_detector.h"
 #include "log_viewer.h"
@@ -1231,6 +1232,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 }
 
                 case ID_BTN_REFRESH:
+                    media_selector::invalidate();
                     auto_nudge(0.2);
                     break;
 

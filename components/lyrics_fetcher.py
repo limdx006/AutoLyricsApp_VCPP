@@ -27,7 +27,7 @@ def main():
         print("")
         return
 
-    query = f"[{title}] [{artist}]"
+    query = f"{title} {artist}".strip()
     
     for attempt in range(MAX_ATTEMPT):
         try:
