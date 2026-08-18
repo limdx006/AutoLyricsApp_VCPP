@@ -73,12 +73,17 @@ namespace timeline_tracker {
             // Primary fetch: always attempt to retrieve lyrics for the current song,
             // regardless of any existing fetch claim (e.g., from a background probe).
             // Background probes will still respect the claim guard.
+            // On completion (success or failure), finalize_primary_fetch() is called
+            // to re-enable probe-cache scoring for the next tick so the selector
+            // can re-score with the actual lyrics results.
             std::thread([title, artist, hwnd]() {
                 log_viewer::log("[FETCH] Fetching lyrics for: %s - %s\n", title.c_str(), artist.c_str());
                 LyricsResult result = fetch_lyrics(title, artist);
                 // Release any claim if present (no‑op if none).
                 media_selector::release_fetch(title, artist);
                 media_selector::cache_probe_result(title, artist, result.success);
+                // Enable probe-cache scoring for subsequent ticks.
+                media_selector::finalize_primary_fetch();
                 if (result.success)
                 {
                     log_viewer::log("[FETCH] Lyrics found (%zu lines)\n", result.lines.size());
